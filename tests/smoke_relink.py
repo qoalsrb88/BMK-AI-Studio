@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QApplication,QListWidget,QPushButton,QDialogButton
 from bmk_studio.app import Studio,configure_app
 from bmk_studio.core import fingerprint
 
-app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-relink-ui-'));old=root/'old.png';new=root/'moved.png';Image.new('RGB',(50,40),'red').save(old)
+app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-relink-ui-')).resolve();old=root/'old.png';new=root/'moved.png';Image.new('RGB',(50,40),'red').save(old)
 w=Studio(root/'data');w.load(old);w.set_box((1,2,20,30));w.apply_crop();w.draft.setPlainText('relink draft');assert w.save_edit_session()
 before=fingerprint(old);shutil.move(old,new);w.close();app.processEvents()
 w=Studio(root/'data');errors=[];w.error=errors.append;original=QFileDialog.getOpenFileName

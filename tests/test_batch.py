@@ -17,7 +17,7 @@ class FakeTagger:
 
 class BatchTests(unittest.TestCase):
     def setUp(self):
-        self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name)
+        self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name).resolve()
         self.model=self.root/'model';self.model.mkdir()
         for name in ('config.json','model.safetensors','selected_tags.csv'):(self.model/name).write_text('fake')
         self.paths=[]

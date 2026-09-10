@@ -10,7 +10,7 @@ from PySide6.QtCore import QTimer
 from bmk_studio.core import Store
 from bmk_studio.library_view import LibraryView
 
-root=Path(tempfile.mkdtemp(prefix='bmk-paged-'));store=Store(root);blob=io.BytesIO();Image.new('RGB',(96,96),'red').save(blob,format='PNG');blob=blob.getvalue()
+root=Path(tempfile.mkdtemp(prefix='bmk-paged-')).resolve();store=Store(root);blob=io.BytesIO();Image.new('RGB',(96,96),'red').save(blob,format='PNG');blob=blob.getvalue()
 with store.db:store.db.executemany('INSERT INTO image_index VALUES(?,?,?,?)',((f'/synthetic/{i}.png','stamp',f'group{i%20} '+'metadata '*128,blob) for i in range(100000)))
 app=QApplication([]);view=LibraryView(store.root/'library.sqlite3');start=time.monotonic();view.add_references(store.indexed_references());elapsed=time.monotonic()-start
 assert view.count()==100000 and view.pages.reads==0

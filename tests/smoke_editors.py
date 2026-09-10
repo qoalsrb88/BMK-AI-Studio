@@ -10,7 +10,7 @@ from PySide6.QtTest import QTest
 from bmk_studio.app import Studio,configure_app
 from bmk_studio.dialogs import MaskDialog,ResizeDialog,ToneDialog,CompareDialog,RevisionDialog
 
-app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-editors-'))
+app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-editors-')).resolve()
 before=Image.new('RGBA',(720,960),(35,80,120,255));reference=Image.new('RGBA',(720,960),(85,70,100,255))
 source=root/'image.png';before.save(source)
 w=Studio(root/'data');w.show();w.load(source)

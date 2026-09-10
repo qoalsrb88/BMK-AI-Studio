@@ -12,7 +12,7 @@ from bmk_studio.app import Studio,configure_app
 from bmk_studio.stitch_dialog import StitchDialog
 from bmk_studio.core import fingerprint,load_image,stitch_image
 
-app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-stitch-'))
+app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-stitch-')).resolve()
 source=root/'source.png';Image.new('RGB',(360,280),'#285050').save(source)
 external=root/'external.png';Image.new('RGBA',(80,100),(200,60,30,200)).save(external)
 w=Studio(root/'data');w.show();w.load(source);w.set_box((100,80,80,100));w.apply_crop();ctx=w.crop_context.copy();before=fingerprint(source)

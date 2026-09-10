@@ -22,7 +22,7 @@ start=time.perf_counter();view.set_query('group19 sample');app.processEvents();f
 assert view.proxy.rowCount()==1000
 view.set_query('nomatch');assert view.proxy.rowCount()==0
 view.close()
-root=Path(tempfile.mkdtemp(prefix='bmk-library-'));path=root/'image.png';Image.new('RGB',(64,64)).save(path);before=fingerprint(path)
+root=Path(tempfile.mkdtemp(prefix='bmk-library-')).resolve();path=root/'image.png';Image.new('RGB',(64,64)).save(path);before=fingerprint(path)
 w=Studio(root/'data');w.add_paths([path]);w.show()
 def wait():
     deadline=time.monotonic()+15

@@ -7,7 +7,7 @@ from bmk_studio.relink import relink_source
 
 class RelinkTests(unittest.TestCase):
     def setUp(self):
-        self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name);self.data=self.root/'data'
+        self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name).resolve();self.data=self.root/'data'
         self.old=self.root/'old.png';self.new=self.root/'new.png';Image.new('RGB',(32,32),'red').save(self.old);shutil.copy2(self.old,self.new)
         self.store=Store(self.data);self.digest=fingerprint(self.old);self.store.remember_source(self.old,self.digest)
         self.store.save_asset(self.old,{'unknown':{'origin':'preserve'}},'draft','negative','memo')

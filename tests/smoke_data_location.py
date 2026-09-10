@@ -19,7 +19,7 @@ if '--restore' in sys.argv:
     assert (w.store.root/'wildcards/color.txt').read_text()=='blue'
     w.close();app.processEvents();print('PASS: fresh process restores migrated dirty crop, clipboard source, draft, notes, wildcard');sys.exit(0)
 
-root=Path(tempfile.mkdtemp(prefix='bmk-data-settings-'));old=root/'old';target=root/'chosen';config=root/'startup.json'
+root=Path(tempfile.mkdtemp(prefix='bmk-data-settings-')).resolve();old=root/'old';target=root/'chosen';config=root/'startup.json'
 source=old/'clipboard/source.png';source.parent.mkdir(parents=True);Image.new('RGB',(100,120),'#739eae').save(source);before=fingerprint(source)
 w=Studio(old,location_config=config);w.show();w.add_paths([source]);errors=[];w.error=errors.append
 end=time.monotonic()+20

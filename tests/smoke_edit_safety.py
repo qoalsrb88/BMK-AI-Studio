@@ -8,7 +8,7 @@ from PIL import Image
 from PySide6.QtWidgets import QApplication
 from bmk_studio.app import Studio,configure_app
 
-app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-safe-edit-'))
+app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-safe-edit-')).resolve()
 a=root/'a.png';b=root/'b.png';Image.new('RGB',(100,100),'red').save(a);Image.new('RGB',(120,80),'blue').save(b)
 w=Studio(root/'data');w.load(a);assert not w.image_dirty()
 w.set_box((5,5,50,50));w.apply_crop();assert w.image_dirty()

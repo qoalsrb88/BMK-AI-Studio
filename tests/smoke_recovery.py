@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QApplication
 from bmk_studio.app import Studio,configure_app
 from bmk_studio.core import fingerprint
 
-root=Path(tempfile.mkdtemp(prefix='bmk-recovery-'));source=root/'a.png';Image.new('RGB',(120,80),'red').save(source);digest=fingerprint(source)
+root=Path(tempfile.mkdtemp(prefix='bmk-recovery-')).resolve();source=root/'a.png';Image.new('RGB',(120,80),'red').save(source);digest=fingerprint(source)
 code='''import os,sys,time
 from PySide6.QtWidgets import QApplication
 from bmk_studio.app import Studio

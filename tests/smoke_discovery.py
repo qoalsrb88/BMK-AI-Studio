@@ -13,7 +13,7 @@ from bmk_studio.core import fingerprint
 from bmk_studio.collection_drop import MIME
 from bmk_studio.background import JobCenter
 
-app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-discovery-'));w=Studio(root/'user');w.show();errors=[];w.error=errors.append
+app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-discovery-')).resolve();w=Studio(root/'user');w.show();errors=[];w.error=errors.append
 def drain():
     deadline=time.monotonic()+40
     while (w.jobs or w.library.search_pending or w.library.large.timer.isActive()) and time.monotonic()<deadline:app.processEvents();time.sleep(.01)

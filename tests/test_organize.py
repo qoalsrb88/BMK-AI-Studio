@@ -11,7 +11,7 @@ class OrganizeTests(unittest.TestCase):
         self.assertEqual(field('file\n{"size":[20,30]}','aspect'),'portrait')
     def test_copy_rebases_classification_without_rewriting_note_literals(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root=Path(tmp);store=Store(root/'old');path=str(store.root/'clipboard/image.png')
+            root=Path(tmp).resolve();store=Store(root/'old');path=str(store.root/'clipboard/image.png')
             set_favorites(store.db,[path],True);set_rating(store.db,[path],4)
             with store.db:
                 store.db.execute('INSERT INTO collections VALUES(?)',('keep',));store.db.execute('INSERT INTO collection_items VALUES(?,?)',('keep',path))

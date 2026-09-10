@@ -10,7 +10,7 @@ from bmk_studio.app import Studio,configure_app
 from bmk_studio.core import fingerprint
 from bmk_studio.color import srgb_profile
 
-app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-color-'));path=root/'rgba.png'
+app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-color-')).resolve();path=root/'rgba.png'
 Image.new('RGBA',(30,20),(20,70,140,120)).save(path,icc_profile=srgb_profile());before=fingerprint(path)
 w=Studio(root/'data');w.load(path);w.rotate();errors=[];w.error=errors.append
 def apply():app.activeModalWidget().findChild(QDialogButtonBox).button(QDialogButtonBox.StandardButton.Apply).click()

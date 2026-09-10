@@ -57,10 +57,13 @@ def save_choice(path,config=None):
     finally:temporary.unlink(missing_ok=True)
 
 def path_mapper(source,target):
+    source=Path(source).resolve();target=Path(target).resolve()
     def remap(value):
         if not isinstance(value,str) or not Path(value).is_absolute():return value
-        try:return str(target/Path(value).relative_to(source))
-        except ValueError:return value
+        # Windows TEMP and imported records can use an 8.3 alias for this root.
+        # Resolve before containment checks; leave external values verbatim.
+        try:return str(target/Path(value).resolve().relative_to(source))
+        except (ValueError,OSError,RuntimeError):return value
     return remap
 
 def rewrite_record(record,remap):

@@ -9,7 +9,7 @@ from PySide6.QtCore import QTimer
 from bmk_studio.app import Studio,configure_app
 from bmk_studio.core import fingerprint
 
-app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-sessions-'))
+app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-sessions-')).resolve()
 a=root/'a.png';b=root/'b.png';Image.new('RGB',(160,120),'red').save(a);Image.new('RGB',(120,160),'blue').save(b)
 w=Studio(root/'data');w.show();w.load(a);w.set_box((10,20,60,70));w.apply_crop()
 before=fingerprint(a);ticks=[];timer=QTimer();timer.timeout.connect(lambda:ticks.append(1));timer.start(1)

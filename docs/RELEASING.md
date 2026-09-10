@@ -1,6 +1,6 @@
 # GitHub 게시와 실행 파일 배포
 
-예정 저장소: https://github.com/qoalsrb88/BMK-AI-Studio
+소스 저장소: [qoalsrb88/BMK-AI-Studio](https://github.com/qoalsrb88/BMK-AI-Studio). 첫 게시 시 비공개(private)로 설정했습니다.
 
 ## 처음 게시하기
 

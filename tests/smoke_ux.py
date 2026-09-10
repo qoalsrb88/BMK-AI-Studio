@@ -13,7 +13,7 @@ from bmk_studio.app import Studio,configure_app
 from bmk_studio.core import fingerprint
 
 app=QApplication([]);configure_app(app)
-root=Path(tempfile.mkdtemp(prefix='bmk-ux-'));source=root/'synthetic.png'
+root=Path(tempfile.mkdtemp(prefix='bmk-ux-')).resolve();source=root/'synthetic.png'
 image=Image.new('RGB',(320,240),'#6489b0');image.save(source);before=fingerprint(source)
 w=Studio(root/'data');w.show();w.add_paths([source])
 deadline=time.monotonic()+15

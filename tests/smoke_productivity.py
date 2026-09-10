@@ -10,7 +10,7 @@ from bmk_studio.app import Studio,configure_app
 from bmk_studio.note_fields import NoteFieldsDialog
 from bmk_studio.wildcard_dialog import WildcardDialog
 
-app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-productivity-'))
+app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-productivity-')).resolve()
 doc={'prompt':'original','loras':[{'name':'test','weight':1.0,'enabled':True,'unknown':{'x':[1,False]}}],'params':[{'node':'12','widget':'seed','type':'int','value':42,'future':'preserved'}],'ui':{'order':['prompt','loras'],'collapsed':{'future':True},'unknown':[1]},'extra':{'original':True}}
 before=copy.deepcopy(doc);dialog=NoteFieldsDialog(doc)
 assert dialog.document()==doc

@@ -12,7 +12,7 @@ from PySide6.QtTest import QTest
 from bmk_studio.app import Studio,configure_app
 from bmk_studio.disk_browser import thumbnail
 from bmk_studio.core import Store
-root=Path(tempfile.mkdtemp(prefix='bmk-reflow-'));folder=root/'images';folder.mkdir();(folder/'child').mkdir()
+root=Path(tempfile.mkdtemp(prefix='bmk-reflow-')).resolve();folder=root/'images';folder.mkdir();(folder/'child').mkdir()
 for n,size in enumerate([(420,100),(100,420),(240,240)]):Image.new('RGB',size,'#e63127').save(folder/f'file-{n}-long-name.png')
 store=Store(root/'user');store.state('disk_browser',{'split':[850,430]});store.db.close()
 app=QApplication([]);configure_app(app);w=Studio(root/'user');w.resize(1500,900);w.show();w.activateWindow();w.workspace_mode.setCurrentIndex(2);d=w.disk_browser;app.processEvents();assert all(n>0 for n in d.split.sizes()),'0.9.5 split migration hid a pane'

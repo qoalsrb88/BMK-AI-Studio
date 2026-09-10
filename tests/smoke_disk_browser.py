@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QApplication,QPushButton
 from PySide6.QtCore import Qt,QItemSelectionModel
 from bmk_studio.app import Studio,configure_app
 from bmk_studio.core import fingerprint
-root=Path(tempfile.mkdtemp(prefix='bmk-disk-'));folder=root/'images';folder.mkdir();(folder/'child').mkdir()
+root=Path(tempfile.mkdtemp(prefix='bmk-disk-')).resolve();folder=root/'images';folder.mkdir();(folder/'child').mkdir()
 meta=PngInfo();meta.add_text('parameters','rainy city\nNegative prompt: blur\nSteps: 20, Seed: 1')
 a=folder/'A.png';b=folder/'B.png';Image.new('RGB',(320,240),'red').save(a,pnginfo=meta);Image.new('RGB',(120,180),'blue').save(b);(folder/'text.txt').write_text('leave alone');Image.new('RGB',(20,20),'green').save(folder/'child/C.png')
 hashes={str(p):fingerprint(p) for p in folder.rglob('*') if p.is_file()}

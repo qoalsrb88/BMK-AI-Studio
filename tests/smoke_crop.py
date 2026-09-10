@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QApplication
 from bmk_studio.app import Studio,configure_app
 from bmk_studio.core import fingerprint
 
-app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-crop-'));source=root/'image.png'
+app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-crop-')).resolve();source=root/'image.png'
 pixels=np.zeros((400,512,3),dtype=np.uint8);pixels[:]=(210,180,140);pixels[150:250,200:300]=(120,200,240)
 Image.fromarray(pixels).save(source);before=fingerprint(source)
 w=Studio(root/'data');w.show();w.add_paths([source]);w.tabs.setCurrentIndex(3)

@@ -7,7 +7,7 @@ from PIL import Image
 from PySide6.QtWidgets import QApplication
 from bmk_studio.app import Studio,configure_app
 
-app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-queue-'));model=root/'model';model.mkdir()
+app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-queue-')).resolve();model=root/'model';model.mkdir()
 for name in ('config.json','model.safetensors','selected_tags.csv'):(model/name).write_text('fixture')
 paths=[]
 for i in range(4):

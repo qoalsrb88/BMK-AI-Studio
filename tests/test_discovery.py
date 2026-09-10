@@ -16,7 +16,7 @@ class FakeEncoder:
         return np.asarray([[1,0] if 'forest' in text else [0,1] for text in texts],dtype=np.float32)
 
 class DiscoveryTests(unittest.TestCase):
-    def setUp(self):self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name);self.store=Store(self.root/'user')
+    def setUp(self):self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name).resolve();self.store=Store(self.root/'user')
     def tearDown(self):self.store.db.close();self.temp.cleanup()
     def add(self,name,positive,raw=None):
         path=self.root/name;Image.new('RGB',(64,80),'blue').save(path);record={'positive':positive,'negative':'blur','raw':raw or {},'size':[64,80]}

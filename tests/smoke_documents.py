@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QApplication
 from bmk_studio.app import Studio,configure_app
 from test_metadata import graph
 
-root=Path(tempfile.mkdtemp(prefix='bmk-documents-'))
+root=Path(tempfile.mkdtemp(prefix='bmk-documents-')).resolve()
 app=QApplication([]);configure_app(app)
 w=Studio(root/'data');w.show()
 meta=PngInfo();meta.add_text('parameters','actual output\nNegative prompt: original bad\nSteps: 12, Seed: 7');meta.add_text('prompt',json.dumps(graph()))

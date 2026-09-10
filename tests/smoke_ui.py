@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QApplication
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from bmk_studio.app import Studio, configure_app
 
-root=Path(tempfile.mkdtemp(prefix='bmk-ui-test-'))
+root=Path(tempfile.mkdtemp(prefix='bmk-ui-test-')).resolve()
 image=Image.new('RGB',(900,1100),'#183344');draw=ImageDraw.Draw(image)
 for y in range(1100):
     draw.line((0,y,900,y),fill=(20+int(y/55),48+int(y/32),68+int(y/30)))

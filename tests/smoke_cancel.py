@@ -15,7 +15,7 @@ class SlowFake:
         return [{'device':'fake','model':'test','scores':[{'tag':'test','category':0,'score':.9}]} for p in paths]
 
 app=QApplication([]);configure_app(app)
-root=Path(tempfile.mkdtemp(prefix='bmk-cancel-'));model=root/'model';model.mkdir()
+root=Path(tempfile.mkdtemp(prefix='bmk-cancel-')).resolve();model=root/'model';model.mkdir()
 for name in ('config.json','model.safetensors','selected_tags.csv'):(model/name).write_text('fake')
 paths=[]
 for i in range(8):

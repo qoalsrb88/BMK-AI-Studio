@@ -13,7 +13,7 @@ from PySide6.QtCore import QTimer
 from bmk_studio.model_dialog import ModelDownloadDialog
 from bmk_studio.model_download import install_model,official_manifest,download_file
 
-root=Path(tempfile.mkdtemp(prefix='bmk-download-'));source=root/'http';source.mkdir()
+root=Path(tempfile.mkdtemp(prefix='bmk-download-')).resolve();source=root/'http';source.mkdir()
 (source/'config.json').write_text(json.dumps({'architecture':'synthetic-test-only'}));(source/'selected_tags.csv').write_text('name,category\ntest,0\n')
 save_file({'weight':np.ones((2,2),dtype=np.float32)},str(source/'model.safetensors'))
 class QuietHandler(SimpleHTTPRequestHandler):

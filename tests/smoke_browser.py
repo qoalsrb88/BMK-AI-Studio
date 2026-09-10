@@ -11,7 +11,7 @@ from bmk_studio.app import Studio,configure_app
 from bmk_studio.core import fingerprint
 from bmk_studio.compare_browser import BrowserCompareDialog
 
-app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-browser-'));w=Studio(root/'data');w.show()
+app=QApplication([]);configure_app(app);root=Path(tempfile.mkdtemp(prefix='bmk-browser-')).resolve();w=Studio(root/'data');w.show()
 def drain():
     end=time.monotonic()+30
     while (w.jobs or w.library.search_pending) and time.monotonic()<end:app.processEvents();time.sleep(.01)

@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QApplication,QDialogButtonBox,QMessageBox
 from PySide6.QtCore import QTimer
 from bmk_studio.app import Studio,configure_app
 from bmk_studio.note_transfer import NoteTransferDialog
-root=Path(tempfile.mkdtemp(prefix='bmk-tabs-'));source=root/'image.png';Image.new('RGB',(400,500),'#537ba0').save(source)
+root=Path(tempfile.mkdtemp(prefix='bmk-tabs-')).resolve();source=root/'image.png';Image.new('RGB',(400,500),'#537ba0').save(source)
 app=QApplication([]);configure_app(app);w=Studio(root/'user');w.show();w.add_paths([source])
 def wait():
     end=time.monotonic()+20

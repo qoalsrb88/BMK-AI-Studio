@@ -9,7 +9,7 @@ from bmk_studio import data_location as location
 
 class DataLocationTests(unittest.TestCase):
     def setUp(self):
-        self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name);self.source=self.root/'old';self.target=self.root/'new';self.config=self.root/'startup.json'
+        self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name).resolve();self.source=self.root/'old';self.target=self.root/'new';self.config=self.root/'startup.json'
         self.store=Store(self.source);self.store.save_note('keep',{'prompt':str(self.source/'literal-in-prompt'),'future':{'x':[1,False]}})
     def tearDown(self):self.store.db.close();self.temp.cleanup()
     def test_copy_rebases_dependencies_but_preserves_unknown_notes_and_originals(self):
@@ -31,6 +31,33 @@ class DataLocationTests(unittest.TestCase):
             body=json.loads(migrated.notes()[0][2]);self.assertEqual(body['future'],{'x':[1,False]});self.assertEqual(body['prompt'],str(self.source/'literal-in-prompt'))
             self.assertEqual(migrated.state('window')['model'],'D:/external/model')
         finally:migrated.db.close()
+    def test_copy_rebases_alias_paths_and_keeps_literal_text(self):
+        clipboard=self.source/'clipboard';clipboard.mkdir();image=clipboard/'source.png'
+        Image.new('RGB',(20,30),'blue').save(image)
+        # GitHub Windows supplies an 8.3 TEMP root. Exercise an equivalent path
+        # containing .. on hosts whose TEMP root already uses its full name.
+        alias=Path(self.temp.name)/'old'
+        if alias==self.source:alias=self.source/'..'/'old'
+        alias_image=str(alias/'clipboard/source.png');external=str(alias.parent/'external.png')
+        self.store.save_asset(alias_image,{'literal':alias_image},'keep','','')
+        self.store.save_note('alias literal',{'prompt':alias_image})
+        self.store.state('window',{'path':alias_image,'reference':external})
+        sessions=Sessions(self.source)
+        sessions.save(Image.new('RGB',(10,10)),{'schema':1,'source':alias_image,'source_hash':fingerprint(image),'operations':[]})
+        before=fingerprint(image);location.copy_data(self.source,self.target)
+        self.assertEqual(fingerprint(image),before)
+        self.store.db.close();self.source.rename(self.root/'preserved-old')
+        restored=Sessions(self.target).load(self.target/'clipboard/source.png')
+        self.assertEqual(restored[0].size,(10,10))
+        self.assertEqual(restored[1]['source'],str(self.target/'clipboard/source.png'))
+        with closing(sqlite3.connect(self.target/'library.sqlite3')) as db:
+            row=db.execute('SELECT path,metadata,draft FROM assets').fetchone()
+            self.assertEqual(row[0],str(self.target/'clipboard/source.png'))
+            self.assertEqual(json.loads(row[1])['literal'],alias_image);self.assertEqual(row[2],'keep')
+            body=db.execute("SELECT body FROM notes WHERE title='alias literal'").fetchone()[0]
+            self.assertEqual(json.loads(body)['prompt'],alias_image)
+            state=json.loads(db.execute("SELECT value FROM app_state WHERE key='window'").fetchone()[0])
+            self.assertEqual(state,{'path':str(self.target/'clipboard/source.png'),'reference':external})
     def test_wal_backup_includes_committed_rows(self):
         self.store.db.execute('PRAGMA journal_mode=WAL');self.store.save_note('WAL',{'prompt':'committed'})
         location.activate_directory(self.source,self.target,True,self.config)
