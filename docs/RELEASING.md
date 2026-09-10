@@ -14,11 +14,11 @@
 
 ## 실행 파일은 별도 Release
 
-소스 커밋에 package/portable 또는 모델을 넣지 않습니다. GitHub의 일반 Git 파일 한도는 100 MiB이며 Release 첨부 파일은 각각 2 GiB 미만이어야 합니다. 현재 CUDA 실행 폴더는 약 3GB이므로 실제 압축 크기를 측정한 뒤 배포 형식을 결정하세요. 필요하면 검증된 CPU 패키지 또는 분할 압축을 별도로 준비하고 명확한 복원 안내를 제공합니다. 아직 압축/공개 업로드는 하지 않았습니다.
+소스 커밋에 package/portable 또는 모델을 넣지 않습니다. GitHub의 일반 Git 파일 한도는 100 MiB이며 Release 첨부 파일은 각각 2 GiB 미만이어야 합니다. 현재 CUDA 실행 폴더는 약 3GB이므로 실제 압축 크기를 측정한 뒤 배포 형식을 결정하세요. 필요하면 검증된 CPU 패키지 또는 분할 압축을 별도로 준비하고 명확한 복원 안내를 제공합니다. 0.9.8 배포 절차는 아래와 같습니다.
 
 릴리스 전 확인:
 
-- 게시할 소스 commit/tag와 실행 파일 빌드의 대응 확인. 이번 GitHub 준비는 앱 0.9.7 이후 문서/개발 설정 변경이며 자동으로 0.9.7 태그를 만들지 않습니다.
+- 게시할 소스 commit/tag와 실행 파일 빌드의 대응 확인. 태그는 검증된 깨끗한 커밋에 붙이고, build-info.json의 source_commit과 일치해야 합니다.
 - 새 출력 폴더에 빌드하고 EXE + `_internal` 전체를 유지.
 - 실제 포함된 모든 의존성/모델의 재배포 조건, 저작권 고지 및 필요한 소스 제공 요구 검토. 수집된 라이선스 목록만으로 검토 완료를 선언하지 않음.
 - 개인 설정, 이미지, 노트, DB, 모델 가중치가 없는지 패키지 전체 점검.
@@ -27,3 +27,22 @@
 - 서명되지 않은 베타임을 명시. 서명/자동 업데이트는 아직 미완료.
 
 공식 참고: [일반 파일 한도](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github), [Release 한도](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases), [라이선스](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository).
+
+## 0.9.8 배포 재현
+
+1. docs/licenses의 고지와 DEPENDENCY_SOURCES.md가 실제 런타임 버전과 일치하는지 확인합니다.
+2. 소스 검사·단위·Qt 검사를 실행하고 변경을 커밋합니다.
+3. PowerShell에서 아래처럼 새 폴더에 빌드합니다. 기존 패키지는 덮어쓰지 않습니다.
+
+```powershell
+$env:BMK_BUILD_FOLDER='package-0.9.8'
+$env:BMK_RELEASE_BUILD='1'
+.\.venv\Scripts\python.exe build_windows.py
+.\.venv\Scripts\python.exe scripts/package_release.py package-0.9.8/BMK-AI-Studio release-0.9.8/BMK-AI-Studio-0.9.8-Windows-x64-NVIDIA.zip
+```
+
+4. ZIP을 새 폴더에 풀고 manifest의 모든 SHA256을 비교합니다. 격리된 사용자 데이터로 --self-test, 실제 모델 GPU 진단, native 창 시작·정상 종료를 실행합니다.
+5. 공식 해시가 일치하는 Qt/PySide 소스 아카이브를 같은 Release의 별도 첨부로 제공합니다. 앱 실행에는 필요하지 않습니다.
+6. 검증된 커밋의 태그로 draft prerelease를 만들고 ZIP, manifest, SHA256SUMS.txt, 라이브러리 소스와 검증 요약을 첨부합니다. 업로드된 asset 크기·SHA256 확인 후 prerelease로 게시합니다. 저장소 공개 여부는 변경하지 않습니다.
+
+코드 서명과 자동 업데이트는 별도 미완료 항목입니다. Qt 가상 키보드·PDF 플러그인과 ONNX Runtime 예제 모델은 빌드 hook에서 제외합니다.

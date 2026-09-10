@@ -1,6 +1,6 @@
 # BMK AI Studio
 
-Windows용 독립 이미지·프롬프트 작업실. 현재 소스 버전 **0.9.7**, 로컬 베타입니다. ComfyUI 서버 없이 실행하며 사용자 원본 이미지를 덮어쓰지 않습니다.
+Windows용 독립 이미지·프롬프트 작업실. 현재 소스 버전 **0.9.8**, Windows 베타입니다. ComfyUI 서버 없이 실행하며 사용자 원본 이미지를 덮어쓰지 않습니다.
 
 ## 기능
 
@@ -25,7 +25,7 @@ py -3.12 -m venv .venv
 
 위 명령은 CPU 구성이며 GPU가 없어도 사용할 수 있습니다. CUDA 구성은 [개발 안내](docs/DEVELOPMENT.md)를 참고하세요. 설치 후 `Start.cmd` 또는 콘솔 없는 `Start.vbs`로도 실행할 수 있습니다. 다른 PC의 가상환경을 그대로 복사하지 마세요.
 
-공개 실행 파일 릴리스는 아직 제공하지 않습니다. 소스 ZIP에 EXE와 모델이 포함되어 있다고 가정하지 마세요. 추후 실행 파일 배포 시에는 EXE와 `_internal`을 포함한 폴더 전체를 함께 사용해야 합니다.
+실행 파일은 [v0.9.8 Release](https://github.com/qoalsrb88/BMK-AI-Studio/releases/tag/v0.9.8)의 `BMK-AI-Studio-0.9.8-Windows-x64-NVIDIA.zip`을 사용하세요. 소스 ZIP에는 EXE와 모델이 없습니다. 압축을 모두 풀고 EXE와 `_internal`을 포함한 폴더 전체를 유지하세요. [실행·업데이트 안내](docs/BINARY_README.md)를 참고하세요.
 
 ## 데이터와 모델
 
@@ -35,7 +35,7 @@ py -3.12 -m venv .venv
 
 ## 검증과 제한
 
-0.9.7 앱은 로컬 Windows 환경에서 단위 테스트 104개, Qt 검사 23개 및 패키지 실행을 검증했습니다. 현재 소스 검사는 폴더 복사 회귀 검사와 업로드 제외 정책 검사를 포함해 단위 테스트 107개, Qt 검사 23개입니다. [GitHub Actions 검사 결과](https://github.com/qoalsrb88/BMK-AI-Studio/actions/workflows/windows-tests.yml)는 각 커밋에서 확인할 수 있습니다. CI는 CPU·합성 데이터를 사용하며 실제 GPU/로컬 모델 검사는 별도입니다. 검증 결과가 모든 PC에서의 호환성을 보장하지는 않습니다.
+현재 소스 검사는 폴더 복사·업로드 제외 정책·배포 패키지 검사를 포함해 단위 테스트 109개, Qt 검사 23개입니다. 실행 파일의 GPU·압축 해제 검증 범위는 각 Release 안내에 기록합니다. [GitHub Actions 검사 결과](https://github.com/qoalsrb88/BMK-AI-Studio/actions/workflows/windows-tests.yml)는 각 커밋에서 확인할 수 있습니다. CI는 CPU·합성 데이터를 사용하며 실제 GPU/로컬 모델 검사는 별도입니다. 검증 결과가 모든 PC에서의 호환성을 보장하지는 않습니다.
 
 PixAI 연동, 서명된 설치 프로그램 및 자동 업데이트는 미완료입니다. 의미 검색은 프롬프트/태그 텍스트 대상이며 이미지 픽셀 CLIP 검색이 아닙니다. 파일 탐색에는 원본 삭제·이동 기능이 없습니다. 기록되지 않은 생성 프롬프트나 실제 실행 분기를 추측하지 않습니다.
 

@@ -18,7 +18,7 @@ from .workspace import WorkspaceMixin
 from .discovery_ui import DiscoveryMixin
 from .appearance import apply_theme, decorate, icon
 from .crop_ui import CropInteraction,bounded_box,anchored_box,snap_value
-from . import data_location
+from . import data_location, __version__
 from .data_dialog import DataDirectoryDialog
 from .core import (Store, data_dir, inspect_image, load_image, json_text, fingerprint,
     unique_path, save_derived, crop_image, stitch_image, tone_restore, EXTENSIONS, file_stamp, resize_image, normalize_category, validate_note, searchable_tags)
@@ -177,7 +177,7 @@ from .main_tabs import MainTabsMixin
 class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
     def __init__(self, root=None, location_config=None):
         super().__init__()
-        self.setWindowTitle('BMK AI Studio 0.9.7 · 이미지와 프롬프트 작업실')
+        self.setWindowTitle(f'BMK AI Studio {__version__} · 이미지와 프롬프트 작업실')
         self.location_config=Path(location_config) if location_config else (Path(root).parent/'test-data-location.json' if root is not None else data_location.config_path())
         self.data_switch_ready=False
         self.resize(1500,960)
