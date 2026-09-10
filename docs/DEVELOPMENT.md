@@ -9,7 +9,7 @@ Windows x64 / Python 3.12 기준입니다. README의 CPU 설치 명령을 먼저
 .\.venv\Scripts\python.exe scripts/validate.py
 ```
 
-validate.py는 unit 및 23개 Qt smoke를 실행합니다. 합성 이미지와 임시 데이터 폴더를 사용합니다. 태깅 변경 시에는 tests의 선택적 로컬 모델/GPU smoke도 실행하고 모델·GPU·정밀도를 기록하세요. 자동 모델 다운로드나 실제 사용자 데이터 업로드를 CI에 추가하지 마세요.
+validate.py는 unit 및 24개 Qt smoke를 실행합니다. 합성 이미지와 임시 데이터 폴더를 사용합니다. 태깅 변경 시에는 tests의 선택적 로컬 모델/GPU smoke도 실행하고 모델·GPU·정밀도를 기록하세요. 자동 모델 다운로드나 실제 사용자 데이터 업로드를 CI에 추가하지 마세요.
 
 GitHub Actions는 Windows + CPU 의존성을 설치합니다. 외부 action은 확인한 전체 commit SHA로 고정했고, 권한은 contents: read입니다. fork PR에서 비밀값이나 배포 권한을 사용하는 작업은 없습니다. main 업로드와 PR마다 자동 검사하며, [Actions 실행 목록](https://github.com/qoalsrb88/BMK-AI-Studio/actions/workflows/windows-tests.yml)에서 결과를 확인합니다.
 
@@ -28,3 +28,4 @@ $env:BMK_BUILD_FOLDER='package-release'
 ```
 
 패키지는 개발 환경의 의존성을 포함합니다. CUDA 환경에서 빌드하면 용량이 커집니다. 다른 환경에서 빌드한 패키지는 별도로 검증해야 합니다. 모델과 사용자 데이터는 포함하지 마세요. 출시 전 단계는 RELEASING.md를 참고하세요.
+
