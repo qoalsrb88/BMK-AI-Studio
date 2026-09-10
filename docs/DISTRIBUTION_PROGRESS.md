@@ -40,11 +40,15 @@ python scripts/validate_installer.py SETUP.exe BUNDLE NEW-EVIDENCE-DIRECTORY
 참고: [Inno Setup 비관리자 설치](https://jrsoftware.org/ishelp/topic_admininstallmode.htm), [사용자 파일 제거 주의](https://jrsoftware.org/ishelp/topic_uninstalldeletesection.htm), [GitHub Release API](https://docs.github.com/en/rest/releases/releases).
 
 
-## 0.9.9 로컬 배포 후보 검증
+## 0.9.9 최종 로컬 배포 후보 검증
 
-- CPU ZIP: 255,805,689 bytes, 실행 폴더 709,633,287 bytes / 4,976 파일.
-- CPU 설치 파일: 223,316,135 bytes. 실제 설치 파일 해시 검증·격리 실행·재설치 거부·제거 후 사용자 파일 보존 통과.
-- NVIDIA 설치 파일: 2,031,587,652 bytes. 실행 파일은 격리 진단과 native Windows 시작·정상 종료를 통과했습니다.
-- 단위 111개와 Qt 24개가 기존 환경 및 독립 CPU 환경에서 통과했습니다. 실제 CPU WD 모델에서 합성 이미지로 10,861개 점수 반환 확인. CPU 모델 검사는 소스 환경에서 수행했습니다.
-- 로컬 CPU/NVIDIA 후보의 build-info.json은 56ad875153c6b5a15465a0abeba7b2fc156965e9를 가리킵니다. 이후 f7c246e는 라이선스의 줄바꿈만 정규화한 커밋입니다. 첫 깨끗한 CI 체크아웃의 dirty 감지를 재현하고 문구 변경 없이 수정했습니다.
-- 0.9.9 소스는 비공개 저장소에 반영했습니다. 설치 파일/CPU ZIP은 아직 GitHub Release에 게시하지 않았습니다. 기존 Standalone 바로가기와 0.9.8은 유지합니다.
+- CPU ZIP: 255,805,885 bytes. 실행 폴더 709,630,921 bytes / 4,976 파일.
+- CPU 설치 파일: 223,316,041 bytes. NVIDIA 설치 파일: 2,031,587,676 bytes.
+- 양쪽 설치 파일 모두 설치 후 전체 파일 SHA256 일치, 격리 실행, 기존 폴더 덮어쓰기 거부, 제거 후 사용자 추가 파일 보존 통과.
+- 단위 111개 / Qt 24개 통과. 실제 CPU WD 모델에서 합성 이미지로 10,861개 점수 반환 확인. 모델 검사는 소스 CPU 환경에서 수행했습니다.
+- 최종 후보의 build-info.json은 d811f4a6076aee08e265084ce0e98721498cbf88를 가리킵니다.
+- 첫 CI 실패는 라이선스 줄바꿈으로 인한 dirty 체크아웃이었습니다. 문구 변경 없이 정규화했습니다. 두 번째 실패는 진단 도구의 축약 임시 경로 비교였습니다. 진단 경로를 resolve한 최종 소스와 빌드는 통과했습니다.
+- [GitHub Windows 소스 검사](https://github.com/qoalsrb88/BMK-AI-Studio/actions/runs/34451520948) 성공.
+- [깨끗한 Windows VM의 CPU 빌드·frozen 진단·패키지 검사](https://github.com/qoalsrb88/BMK-AI-Studio/actions/runs/34451546270) 성공. 다른 물리 PC·GPU 드라이버 조합의 실사용 검증은 별도입니다.
+- 로컬 증거: validation-distribution/FINAL_VALIDATION.json. 최종 설치 폴더는 release-installer-0.9.9-cpu-verified 및 release-installer-0.9.9-nvidia-verified입니다. CPU ZIP은 release-0.9.9-cpu-verified에 있습니다.
+- 소스는 비공개 GitHub에 반영했습니다. 설치 파일/CPU ZIP은 아직 Release에 게시하지 않았습니다. 기존 Standalone 바로가기와 0.9.8은 유지합니다.
