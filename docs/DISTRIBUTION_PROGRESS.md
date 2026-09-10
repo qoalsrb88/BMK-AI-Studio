@@ -29,7 +29,7 @@ python scripts/validate_installer.py SETUP.exe BUNDLE NEW-EVIDENCE-DIRECTORY
 
 ## 다음 단계와 필요한 준비
 
-1. CPU 실행 파일의 실제 크기·frozen 진단 확인 후 CPU판 제공 여부를 결정합니다. NVIDIA판을 대체하지 않습니다.
+1. CPU판은 선택 가능한 경량 배포로 준비했습니다. NVIDIA판을 대체하지 않습니다.
 2. 다른 물리 Windows PC와 드라이버에서 실제 사용 검증: 테스트 PC가 필요합니다. CPU 환경/격리 PATH 검사는 이를 대신하지 않습니다.
 3. 코드 서명: 인증서/서비스, 게시자 신원, 예산과 안전한 서명 수단이 정해져야 실제 서명을 진행할 수 있습니다. 현재 미서명입니다.
 4. 자동 다운로드·교체·복구: private 저장소 인증 방식 또는 공개 배포 채널을 결정해야 합니다. 앱 종료·새 폴더 검증·이전 버전 복귀와 데이터 구조 변경 시 복구 정책까지 함께 검증해야 합니다. 현재 구현하지 않았습니다.
@@ -39,3 +39,12 @@ python scripts/validate_installer.py SETUP.exe BUNDLE NEW-EVIDENCE-DIRECTORY
 
 참고: [Inno Setup 비관리자 설치](https://jrsoftware.org/ishelp/topic_admininstallmode.htm), [사용자 파일 제거 주의](https://jrsoftware.org/ishelp/topic_uninstalldeletesection.htm), [GitHub Release API](https://docs.github.com/en/rest/releases/releases).
 
+
+## 0.9.9 로컬 배포 후보 검증
+
+- CPU ZIP: 255,805,689 bytes, 실행 폴더 709,633,287 bytes / 4,976 파일.
+- CPU 설치 파일: 223,316,135 bytes. 실제 설치 파일 해시 검증·격리 실행·재설치 거부·제거 후 사용자 파일 보존 통과.
+- NVIDIA 설치 파일: 2,031,587,652 bytes. 실행 파일은 격리 진단과 native Windows 시작·정상 종료를 통과했습니다.
+- 단위 111개와 Qt 24개가 기존 환경 및 독립 CPU 환경에서 통과했습니다. 실제 CPU WD 모델에서 합성 이미지로 10,861개 점수 반환 확인. CPU 모델 검사는 소스 환경에서 수행했습니다.
+- 로컬 CPU/NVIDIA 후보의 build-info.json은 56ad875153c6b5a15465a0abeba7b2fc156965e9를 가리킵니다. 이후 f7c246e는 라이선스의 줄바꿈만 정규화한 커밋입니다. 첫 깨끗한 CI 체크아웃의 dirty 감지를 재현하고 문구 변경 없이 수정했습니다.
+- 0.9.9 소스는 비공개 저장소에 반영했습니다. 설치 파일/CPU ZIP은 아직 GitHub Release에 게시하지 않았습니다. 기존 Standalone 바로가기와 0.9.8은 유지합니다.
