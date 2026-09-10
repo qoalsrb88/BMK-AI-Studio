@@ -1,14 +1,14 @@
-# BMK AI Studio 0.9.8 베타 — Windows x64 / NVIDIA
+# BMK AI Studio 베타 — Windows x64
 
 ## 실행
 
-1. BMK-AI-Studio-0.9.8-Windows-x64-NVIDIA.zip을 다운로드합니다.
+1. 사용할 버전의 Windows-x64 ZIP을 다운로드합니다.
 2. ZIP 전체를 새 폴더에 압축 해제합니다. 이전 버전 폴더에 덮어쓰지 마세요.
 3. 폴더 안의 BMK-AI-Studio.exe를 실행합니다. _internal과 함께 두어야 합니다.
 
-Python이나 ComfyUI를 별도로 설치할 필요가 없습니다. 이 패키지는 NVIDIA CUDA 13.0 런타임을 포함합니다. GPU 가속에는 호환되는 NVIDIA 드라이버가 필요하며, 이번 검증 장비는 Windows x64 / RTX 4090입니다. 태깅 설정에서 CPU를 선택할 수도 있습니다. 다른 GPU·드라이버 조합은 별도로 확인해야 합니다.
+Python이나 ComfyUI를 별도로 설치할 필요가 없습니다. NVIDIA판은 CUDA 런타임을 포함하고 CPU판은 포함하지 않습니다. GPU 가속에는 호환되는 NVIDIA 드라이버가 필요하며, 이번 검증 장비는 Windows x64 / RTX 4090입니다. CPU판은 CPU에서 태깅하며 FP32를 사용합니다. 다른 GPU·드라이버 조합은 별도로 확인해야 합니다.
 
-서명되지 않은 베타 실행 파일입니다. 실행 전 게시된 SHA256과 파일을 비교할 수 있습니다. 자동 업데이트와 서명된 설치 프로그램은 아직 제공하지 않습니다.
+서명되지 않은 베타 실행 파일입니다. 실행 전 게시된 SHA256과 파일을 비교할 수 있습니다. 0.9.9 소스에는 설정 → 업데이트 확인이 있습니다. 비공개 저장소는 로그인된 브라우저에서 확인합니다. 자동 다운로드·교체와 코드 서명은 미완료입니다.
 
 ## 사용자 데이터와 모델
 
@@ -29,3 +29,7 @@ PixAI, 서명된 설치 프로그램, 자동 업데이트는 미완료입니다.
 앱 소스는 MIT입니다. Qt/PySide6는 LGPLv3로 사용하며 NVIDIA 런타임과 각 외부 라이브러리에는 별도 조건이 적용됩니다. LICENSE, THIRD_PARTY_NOTICES.md, DEPENDENCY_SOURCES.md, licenses/, _internal/third_party_licenses/를 참고하세요. Qt 라이브러리를 수정하고 호환되는 DLL로 교체할 권리 및 이를 위한 역공학을 제한하지 않습니다. NVIDIA 조건은 NVIDIA 구성요소에 적용되며 Qt의 LGPL 권리를 제한하지 않습니다.
 
 소스 및 사용 안내: https://github.com/qoalsrb88/BMK-AI-Studio
+
+## 서명 없는 설치 파일
+
+Setup.exe는 새 빈 폴더에 버전별로 설치합니다. 기존 버전이나 사용자 데이터 폴더에 덮어쓰지 않습니다. 시작 메뉴에 버전별 바로가기를 만들고 바탕화면 바로가기는 선택 사항입니다. 제거 시 설치한 프로그램 파일만 제거하며 사용자 추가 파일과 외부 데이터는 남깁니다. 현재 설치 화면은 영어입니다.

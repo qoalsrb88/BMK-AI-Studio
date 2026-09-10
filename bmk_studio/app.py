@@ -290,6 +290,10 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         change_data=button('사용자 데이터 폴더 변경…',lambda:dialog.reject() if self.change_data_directory() else None);layout.addRow(change_data)
         if data_location.session_directory or os.environ.get('BMK_STUDIO_DATA','').strip():
             change_data.setEnabled(False);layout.addRow(QLabel('실행 옵션 또는 BMK_STUDIO_DATA로 경로를 지정했습니다.\n설정에서 변경하려면 해당 경로 지정을 해제하고 실행하세요.'))
+        def updates():
+            from .update_dialog import UpdateDialog
+            UpdateDialog(dialog).exec()
+        layout.addRow(button('업데이트 확인 / 배포 페이지…',updates))
         naming=QLineEdit(self.appearance.get('export_pattern','{source}_edited'));layout.addRow('내보내기 이름 규칙',naming)
         name_preview=QLabel();name_preview.setWordWrap(True);layout.addRow('이름 미리보기',name_preview)
         def preview_name():
