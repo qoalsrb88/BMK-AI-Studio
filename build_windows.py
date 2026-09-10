@@ -32,6 +32,12 @@ def main():
     version_file=work/'version-info.txt'
     version_file.write_text(f'''VSVersionInfo(ffi=FixedFileInfo(filevers={version!r}, prodvers={version!r}, mask=0x3f, flags=0x2, OS=0x40004, fileType=0x1, subtype=0x0, date=(0,0)), kids=[StringFileInfo([StringTable('040904B0', [StringStruct('CompanyName','qoalsrb88'),StringStruct('FileDescription','BMK AI Studio'),StringStruct('FileVersion','{__version__}'),StringStruct('ProductName','BMK AI Studio'),StringStruct('ProductVersion','{__version__}'),StringStruct('OriginalFilename','BMK-AI-Studio.exe'),StringStruct('LegalCopyright','Copyright 2026 qoalsrb88')])]),VarFileInfo([VarStruct('Translation',[1033,1200])])])''',encoding='utf-8')
     env=os.environ.copy();env['PYINSTALLER_CONFIG_DIR']=str(work/'cache')
+    # Do not resolve DLLs from unrelated tools (for example Poppler/Conda ICU)
+    # on the caller's PATH. Qt uses the compatible Windows ICU implementation.
+    windows=Path(os.environ.get('WINDIR',r'C:\Windows'))
+    env['PATH']=os.pathsep.join(map(str,(Path(sys.executable).parent,Path(sys.base_prefix),windows/'System32',windows)))
+    for key in ('PYTHONPATH','PYTHONHOME','QT_PLUGIN_PATH','QML2_IMPORT_PATH'):
+        env.pop(key,None)
     command=[sys.executable,'-m','PyInstaller','--onedir','--windowed','--noupx','--name','BMK-AI-Studio',
         '--distpath',str(destination),'--workpath',str(work),'--specpath',str(work),
         '--version-file',str(version_file),'--additional-hooks-dir',str(ROOT/'scripts/pyinstaller_hooks'),
