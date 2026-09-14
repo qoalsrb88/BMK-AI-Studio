@@ -13,10 +13,10 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
     QSplitter, QLabel, QPushButton, QLineEdit, QPlainTextEdit, QTabWidget, QListWidget,
     QListWidgetItem, QFileDialog, QMessageBox, QComboBox, QDoubleSpinBox, QSpinBox,
     QCheckBox, QGraphicsView, QGraphicsScene, QGraphicsRectItem, QAbstractItemView,
-    QDialog, QDialogButtonBox, QFormLayout, QProgressBar, QTreeWidget, QTreeWidgetItem, QScrollArea, QTabBar, QMenu, QSlider, QStackedWidget, QFrame)
+    QDialog, QDialogButtonBox, QFormLayout, QProgressBar, QTreeWidget, QTreeWidgetItem, QScrollArea, QTabBar, QMenu, QSlider, QStackedWidget, QFrame, QHeaderView)
 from .workspace import WorkspaceMixin, bar
 from .discovery_ui import DiscoveryMixin
-from .appearance import apply_theme, decorate, icon, ghost, caption, CANVAS, CANVAS_TEXT
+from .appearance import apply_theme, decorate, icon, ghost, caption, tokens, CANVAS, CANVAS_TEXT
 from .hints import HintListWidget
 from .background import JobCenter
 from .prompt_highlight import PromptEdit, refresh_all as refresh_highlighting
@@ -266,6 +266,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         apply_theme(QApplication.instance(),self.appearance.get('theme','light'))
         self.viewer.setBackgroundBrush(QColor(CANVAS));refresh_highlighting()
         for key,section in getattr(self,'sections',{}).items():section.set_expanded((self.appearance.get('sections') or {}).get(key,section.default))
+        if hasattr(self,'notes'):self.refresh_notes()
         self.viewer.set_interpolation(self.appearance.get('interpolation','smooth'))
         try:self.viewer.overscroll=max(0,min(50,int(self.appearance.get('overscroll',25))))
         except (ValueError,TypeError):self.viewer.overscroll=25
@@ -277,7 +278,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         for i,name in enumerate(('image','note','tag','edit','info')):self.tabs.setTabIcon(i,icon(name))
 
     def resize_thumbnails(self,size):
-        self.library.set_thumbnail_size(64 if getattr(self,'active_workspace',None)=='work' else size);self.thumbnail_label.setText(f'{size}px')
+        self.library.set_thumbnail_size(96 if getattr(self,'active_workspace',None)=='work' else size);self.thumbnail_label.setText(f'{size}px')
         if hasattr(self,'appearance'):
             self.appearance['thumbnail_size']=size;self.store.state('appearance',self.appearance)
 
@@ -387,6 +388,9 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         nl.addWidget(caption('프롬프트 노트','section'))
         self.note_search=QLineEdit();self.note_search.setPlaceholderText('노트만 검색');self.note_search.textChanged.connect(self.refresh_notes);nl.addWidget(self.note_search)
         self.notes = QTreeWidget();self.notes.setHeaderHidden(True); self.notes.itemClicked.connect(self.open_note); nl.addWidget(self.notes,2)
+        # Column 1 carries the note count per folder; icons distinguish folders from documents.
+        self.notes.setColumnCount(2);self.notes.setIconSize(QSize(16,16));self.notes.header().setStretchLastSection(False)
+        self.notes.header().setSectionResizeMode(0,QHeaderView.ResizeMode.Stretch);self.notes.header().setSectionResizeMode(1,QHeaderView.ResizeMode.ResizeToContents)
         self.show_archived=QCheckBox('보관함 보기');self.show_archived.toggled.connect(self.refresh_notes);nl.addWidget(self.show_archived)
         nl.addWidget(row(button('노트 가져오기',self.import_notes),button('새 노트',self.new_note)))
         nl.addWidget(button('노트 폴더 가져오기',self.import_note_folder))
@@ -790,17 +794,20 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
                 if not item.data(0,Qt.ItemDataRole.UserRole):expanded[key]=item.isExpanded();remember(item,key)
         remember(self.notes.invisibleRootItem())
         self.notes.clear()
-        folders={}
+        folders={};counts={};folder_icon=icon('folder');note_icon=icon('note')
         for record in self.store.note_entries(self.note_search.text(),self.show_archived.isChecked()):
             nid,title,body,category,archived=record
             parent=self.notes.invisibleRootItem();path=''
             for part in (category.split('/') if category else ['미분류']):
                 path=path+'/'+part
                 if path not in folders:
-                    folder=QTreeWidgetItem([part]);parent.addChild(folder);folders[path]=folder;folder.setExpanded(expanded.get(path,True))
-                parent=folders[path]
-            item=QTreeWidgetItem([title]);item.setData(0,Qt.ItemDataRole.UserRole,nid);parent.addChild(item)
+                    folder=QTreeWidgetItem([part,'']);folder.setIcon(0,folder_icon);parent.addChild(folder);folders[path]=folder;folder.setExpanded(expanded.get(path,True))
+                counts[path]=counts.get(path,0)+1;parent=folders[path]
+            item=QTreeWidgetItem([title,'']);item.setIcon(0,note_icon);item.setData(0,Qt.ItemDataRole.UserRole,nid);parent.addChild(item)
             if nid==selected_id:self.notes.setCurrentItem(item)
+        muted=QColor(tokens()['muted'])
+        for path,folder in folders.items():
+            folder.setText(1,str(counts.get(path,0)));folder.setForeground(1,muted);folder.setTextAlignment(1,Qt.AlignmentFlag.AlignRight|Qt.AlignmentFlag.AlignVCenter)
         self.notes.verticalScrollBar().setValue(scroll)
         current=self.note_category.currentText();self.note_category.blockSignals(True);self.note_category.clear()
         self.note_category.addItems(['']+sorted({r[3] for r in self.store.note_entries() if r[3]}));self.note_category.setCurrentText(current);self.note_category.blockSignals(False)

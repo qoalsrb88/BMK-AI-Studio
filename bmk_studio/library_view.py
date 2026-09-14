@@ -2,12 +2,23 @@
 from collections import OrderedDict
 from PySide6.QtCore import Qt,QAbstractListModel,QModelIndex,QSize,QSortFilterProxyModel,Signal,QItemSelectionModel,QTimer
 from PySide6.QtGui import QPixmap,QIcon,QDrag
-from PySide6.QtWidgets import QListView,QPushButton
+from PySide6.QtWidgets import QListView,QPushButton,QStyledItemDelegate,QStyleOptionViewItem
 from .library_disk import ThumbnailPages,SearchJob
+from .hints import paint_hint
+from .cards import paint_card,caption_height
 
 ROLE=Qt.ItemDataRole
+RATING_ROLE=ROLE.UserRole+2
+TITLE_ROLE=ROLE.UserRole+3
 
-from .hints import paint_hint
+class LibraryCardDelegate(QStyledItemDelegate):
+    """Thumbnail card: rounded hover/selection, two-line name, favourite badge, accent ring on the open image."""
+    def paint(self,painter,option,index):
+        opt=QStyleOptionViewItem(option);self.initStyleOption(opt,index);icon=QIcon(opt.icon);title=index.data(TITLE_ROLE) or opt.text
+        view=self.parent();path=index.data(ROLE.UserRole);rating=index.data(RATING_ROLE)
+        badge=None if rating is None else '★'+(str(rating) if rating else '')
+        current=bool(view.owner is not None and getattr(view.owner,'path',None) and str(view.owner.path)==path)
+        paint_card(painter,opt,option.rect,lambda p,area:icon.paint(p,area,Qt.AlignmentFlag.AlignCenter),title,badge,current)
 
 class LibraryItem:
     def __init__(self,view,title,path):
@@ -28,13 +39,16 @@ class LibraryModel(QAbstractListModel):
         if not index.isValid() or not 0<=index.row()<len(self.rows):return None
         item=self.rows[index.row()]
         if role==ROLE.DisplayRole:
+            # Accessible/text form keeps the star prefix; the card delegate draws TITLE_ROLE plus a badge instead.
             rating=self.parent().favorite_ratings.get(item.path)
             return ('★'+(str(rating) if rating else '')+' ' if rating is not None else '')+item.title
+        if role==TITLE_ROLE:return item.title
+        if role==RATING_ROLE:return self.parent().favorite_ratings.get(item.path)
         if role in (ROLE.UserRole,ROLE.ToolTipRole):return item.path
         if role==ROLE.DecorationRole:return self.thumbnail(item)
         if role==ROLE.SizeHintRole:
             view=self.parent();size=view.iconSize().height()
-            return QSize(size+32,size+46) if view.viewMode()==QListView.ViewMode.IconMode else QSize(150,size+14)
+            return QSize(size+24,size+16+caption_height(view.fontMetrics())) if view.viewMode()==QListView.ViewMode.IconMode else QSize(150,size+14)
         if role==ROLE.UserRole+1:return item.search
     def thumbnail(self,item):
         if item.path in self.icons:
@@ -81,7 +95,7 @@ class LibraryView(QListView):
         self.favorite_ratings={}
         self.search_timer=QTimer(self);self.search_timer.setSingleShot(True);self.search_timer.setInterval(100);self.search_timer.timeout.connect(self.start_search)
         self.proxy.setSourceModel(self.records);self.proxy.setFilterRole(ROLE.UserRole+1);self.setModel(self.proxy)
-        self.setUniformItemSizes(True);self.setLayoutMode(QListView.LayoutMode.Batched);self.setBatchSize(200)
+        self.setUniformItemSizes(True);self.setLayoutMode(QListView.LayoutMode.Batched);self.setBatchSize(200);self.setItemDelegate(LibraryCardDelegate(self))
         self.clicked.connect(lambda index:self.itemClicked.emit(self.records.rows[self.proxy.mapToSource(index).row()]))
         self.setMouseTracking(True)
         self.remove_button=QPushButton('×',self.viewport());self.remove_button.setFixedSize(26,26)

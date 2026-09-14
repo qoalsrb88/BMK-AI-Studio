@@ -242,8 +242,8 @@ class WorkspaceMixin:
         self.preview_panel.setVisible(not browsing)
         self.library.setViewMode(QListView.ViewMode.IconMode);self.library.setMovement(QListView.Movement.Static)
         self.library.setFlow(QListView.Flow.LeftToRight);self.library.setWrapping(browsing);self.library.setResizeMode(QListView.ResizeMode.Adjust)
-        size=self.thumbnail_slider.value() if browsing else 64
-        self.library.setMinimumHeight(110 if browsing else size+70);self.library.setMaximumHeight(16777215 if browsing else size+80)
+        size=self.thumbnail_slider.value() if browsing else 96
+        self.library.setMinimumHeight(110 if browsing else size+84);self.library.setMaximumHeight(16777215 if browsing else size+94)
         self.library.set_thumbnail_size(size);self.library.setWordWrap(False)
         self.main_splitter.setSizes(self.workspace_sizes.get(mode,[265,850,370]))
         def restore():

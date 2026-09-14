@@ -4,20 +4,21 @@ import os
 from PySide6.QtCore import Qt,QSize,QDir,QModelIndex,QStandardPaths,QEvent
 from PySide6.QtGui import QIcon,QKeySequence,QShortcut
 from PySide6.QtWidgets import (QListView,QStyledItemDelegate,QStyleOptionViewItem,QStyle,QWidget,QVBoxLayout,QLabel,QTreeView,QFileSystemModel,QAbstractItemView,QListWidget,QListWidgetItem)
-from .appearance import caption
+from .appearance import caption,icon as line_icon,pixmap,tokens
 from .hints import paint_hint
+from .cards import paint_card
 
 class CardDelegate(QStyledItemDelegate):
+    """Explorer card: folders show a light glyph tile, images their thumbnail; names wrap to two lines."""
     def sizeHint(self,option,index):return self.parent().gridSize()
     def paint(self,painter,option,index):
-        opt=QStyleOptionViewItem(option);self.initStyleOption(opt,index);text=opt.text;icon=QIcon(opt.icon);opt.text='';opt.icon=QIcon()
-        view=self.parent();view.style().drawControl(QStyle.ControlElement.CE_ItemViewItem,opt,painter,view)
-        rect=option.rect;side=view.iconSize().width();area=rect.adjusted(12,6,-12,-34)
-        icon.paint(painter,area,Qt.AlignmentFlag.AlignCenter)
-        painter.save();painter.setFont(option.font)
-        role=option.palette.ColorRole.Text
-        painter.setPen(option.palette.color(role));label=rect.adjusted(6,rect.height()-28,-6,-4)
-        painter.drawText(label,Qt.AlignmentFlag.AlignCenter,option.fontMetrics.elidedText(text,Qt.TextElideMode.ElideMiddle,label.width()));painter.restore()
+        opt=QStyleOptionViewItem(option);self.initStyleOption(opt,index);text=opt.text;icon=QIcon(opt.icon);row=index.data(Qt.ItemDataRole.UserRole)
+        def content(p,area):
+            if row and row[2]:
+                side=int(min(area.width(),area.height())*.62);glyph=pixmap('folder',side,fill=tokens()['surface2'])
+                p.drawPixmap(area.center().x()-side//2,area.center().y()-side//2,glyph)
+            else:icon.paint(p,area,Qt.AlignmentFlag.AlignCenter)
+        paint_card(painter,opt,option.rect,content,text)
 
 class ExplorerView(QListView):
     def __init__(self,panel):super().__init__();self.panel=panel;self.wheel_remainder=0;self.setItemDelegate(CardDelegate(self))
@@ -43,9 +44,14 @@ class ExplorerView(QListView):
         paint_hint(self,text)
 
 class TreeDelegate(QStyledItemDelegate):
+    """Drives keep their system icons; folders below them use the line folder glyph in the current text colour."""
+    def __init__(self,parent):super().__init__(parent);self.cached=None
     def initStyleOption(self,option,index):
         super().initStyleOption(option,index)
-        if option.icon.isNull():option.icon=self.parent().style().standardIcon(QStyle.StandardPixmap.SP_DirIcon)
+        if index.parent().isValid() or option.icon.isNull():
+            color=option.palette.color(option.palette.ColorRole.Text).name()
+            if not self.cached or self.cached[0]!=color:self.cached=(color,line_icon('folder',color))
+            option.icon=self.cached[1]
 
 class NavigationPane(QWidget):
     def __init__(self,panel):

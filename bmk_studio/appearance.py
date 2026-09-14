@@ -46,9 +46,9 @@ def tokens(mode=None):
     return THEMES.get(mode or _mode, THEMES['light'])
 
 
-def _svg(body, color, stroke=1.7, size=24):
+def _svg(body, color, stroke=1.7, size=24, fill='none'):
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 24 24">'
-            f'<g fill="none" stroke="{color}" stroke-width="{stroke}" stroke-linecap="round" stroke-linejoin="round">{body}</g></svg>')
+            f'<g fill="{fill}" stroke="{color}" stroke-width="{stroke}" stroke-linecap="round" stroke-linejoin="round">{body}</g></svg>')
 
 
 def icon(name, color=None):
@@ -56,6 +56,20 @@ def icon(name, color=None):
     pix = QPixmap(48, 48); pix.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pix); QSvgRenderer(QByteArray(_svg(PATHS[name], color).encode())).render(painter); painter.end(); pix.setDevicePixelRatio(2)
     return QIcon(pix)
+
+
+_pixmaps = {}
+
+
+def pixmap(name, size, color=None, fill=None, stroke=1.4):
+    """Glyph rendered crisply at `size` px (e.g. folder tiles in the explorer grid); cached per name/size/colour."""
+    t = tokens(); color = color or t['muted']; fill = fill or 'none'
+    key = (name, int(size), color, fill)
+    if key not in _pixmaps:
+        pix = QPixmap(int(size), int(size)); pix.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pix); QSvgRenderer(QByteArray(_svg(PATHS[name], color, stroke, 24, fill).encode())).render(painter); painter.end()
+        _pixmaps[key] = pix
+    return _pixmaps[key]
 
 
 def decorate(button, name):

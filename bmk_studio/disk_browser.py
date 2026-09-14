@@ -9,6 +9,7 @@ from .core import EXTENSIONS,load_image,inspect_image,json_text,file_stamp
 from .workspace import line,action,bar
 from .appearance import CANVAS,caption
 from .prompt_highlight import PromptEdit
+from .cards import caption_height
 from .explorer_navigation import ExplorerView,NavigationPane
 
 
@@ -43,7 +44,7 @@ class DiskModel(QAbstractListModel):
         if role==Qt.ItemDataRole.DisplayRole:return row[1]
         if role==Qt.ItemDataRole.ToolTipRole:return row[0]
         if role==Qt.ItemDataRole.UserRole:return row
-        if role==Qt.ItemDataRole.DecorationRole:return self.panel.folder_icon if row[2] else self.panel.icon(row)
+        if role==Qt.ItemDataRole.DecorationRole:return None if row[2] else self.panel.icon(row)
     def replace(self,rows):self.beginResetModel();self.rows=rows;self.positions={row[0]:i for i,row in enumerate(rows)};self.endResetModel()
 
 
@@ -63,7 +64,6 @@ class DiskBrowser(QWidget):
     def __init__(self,owner,viewer_class):
         super().__init__();self.owner=owner;self.folder='';self.history=[];self.history_at=-1;self.generation=0;self.preview_generation=0;self.active=False
         self.scan_job=None;self.thumb_job=None;self.preview_job=None;self.pending=OrderedDict();self.icons=OrderedDict();self.preview_path=None
-        self.folder_icon=self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon)
         self.cache=owner.store.root/'folder-thumbnails';self.state=owner.store.state('disk_browser') or {}
         layout=QVBoxLayout(self);layout.setContentsMargins(0,0,0,0)
         self.address=QLineEdit();self.address.setPlaceholderText('폴더 주소 입력 후 Enter · 예: H:\\Images');self.address.setAccessibleName('폴더 탐색 주소')
@@ -146,7 +146,7 @@ class DiskBrowser(QWidget):
     def resize_icons(self,*args):
         anchor=self.view.currentIndex()
         if not anchor.isValid():anchor=self.view.indexAt(self.view.viewport().rect().topLeft())
-        n=self.size.value();self.view.setIconSize(QSize(n,n));self.view.setGridSize(QSize(n+36,n+48));self.view.doItemsLayout()
+        n=self.size.value();self.view.setIconSize(QSize(n,n));self.view.setGridSize(QSize(n+36,n+16+caption_height(self.view.fontMetrics())));self.view.doItemsLayout()
         if anchor.isValid():self.view.scrollTo(anchor)
     def selected_paths(self):return [self.proxy.data(i,Qt.ItemDataRole.UserRole)[0] for i in self.view.selectedIndexes() if not self.proxy.data(i,Qt.ItemDataRole.UserRole)[2]]
     def selection_count(self,*args):self.add.setEnabled(bool(self.selected_paths()))
