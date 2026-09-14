@@ -47,6 +47,12 @@ w.favorite_filter.setChecked(True);w.rating_filter.setCurrentIndex(w.rating_filt
 assert w.library.proxy.index(0,0).data().startswith('★4 ')
 with patch.object(QInputDialog,'getText',return_value=('Portrait picks',True)):w.save_search()
 w.clear_browser_filters();drain();w.saved_search.setCurrentIndex(w.saved_search.findData('Portrait picks'));w.restore_search();drain();assert w.library.proxy.rowCount()==1
+# Clicking each combo-backed chip clears that filter and refreshes the result set.
+for combo in (w.aspect_filter,w.pixels_filter,w.days_filter,w.tagged_filter,w.rating_filter,w.collection_filter):
+    w.clear_browser_filters();combo.setCurrentIndex(1);drain()
+    chip=next(button for button in w.filter_chips.widgets if button.text()==combo.currentText()+'  ×')
+    chip.click();drain();assert combo.currentIndex()==0 and w.library.proxy.rowCount()==24
+w.saved_search.setCurrentIndex(w.saved_search.findData('Portrait picks'));w.restore_search();drain();assert w.library.proxy.rowCount()==1
 # Same selection and editable pixels survive workspace switches.
 w.library_items[str(paths[3])].setSelected(True);before=w.current.tobytes();selected=w.selection_paths();w.workspace_mode.setCurrentIndex(1);app.processEvents();w.viewer.scale(1.5,1.5);scale=w.viewer.transform().m11()
 w.workspace_mode.setCurrentIndex(0);app.processEvents();w.workspace_mode.setCurrentIndex(1);app.processEvents()

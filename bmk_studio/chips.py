@@ -68,6 +68,8 @@ class ChipRow(Flow):
         for text, callback in self.chips:
             chip = QPushButton(text + ('  ×' if callback else '')); chip.setProperty('chip', True); chip.setCursor(Qt.CursorShape.PointingHandCursor)
             chip.setToolTip('클릭하면 이 조건을 해제합니다' if callback else text)
-            if callback: chip.clicked.connect(callback)
+            # A chip callback takes no arguments; clicked(bool) must not replace
+            # values captured in a callback's default parameters.
+            if callback: chip.clicked.connect(lambda _checked=False, remove=callback: remove())
             else: chip.setEnabled(False)
             self.add(chip)
