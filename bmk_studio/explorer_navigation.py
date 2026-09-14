@@ -4,6 +4,7 @@ import os
 from PySide6.QtCore import Qt,QSize,QDir,QModelIndex,QStandardPaths,QEvent
 from PySide6.QtGui import QIcon,QKeySequence,QShortcut
 from PySide6.QtWidgets import (QListView,QStyledItemDelegate,QStyleOptionViewItem,QStyle,QWidget,QVBoxLayout,QLabel,QTreeView,QFileSystemModel,QAbstractItemView,QListWidget,QListWidgetItem)
+from .appearance import caption
 
 class CardDelegate(QStyledItemDelegate):
     def sizeHint(self,option,index):return self.parent().gridSize()
@@ -39,9 +40,9 @@ class TreeDelegate(QStyledItemDelegate):
 class NavigationPane(QWidget):
     def __init__(self,panel):
         super().__init__();self.panel=panel;self.setMinimumWidth(150);layout=QVBoxLayout(self);layout.setContentsMargins(0,0,5,0)
-        layout.addWidget(QLabel('빠른 이동 / 즐겨찾기'));self.quick=QListWidget();self.quick.setMaximumHeight(185);layout.addWidget(self.quick)
+        layout.addWidget(caption('빠른 이동 / 즐겨찾기','section'));self.quick=QListWidget();self.quick.setMaximumHeight(185);layout.addWidget(self.quick)
         self.quick.itemClicked.connect(lambda item:panel.navigate(item.data(Qt.ItemDataRole.UserRole)))
-        layout.addWidget(QLabel('내 PC · 폴더'));self.tree=QTreeView();layout.addWidget(self.tree,1)
+        layout.addWidget(caption('내 PC · 폴더','section'));self.tree=QTreeView();layout.addWidget(self.tree,1)
         self.fs=QFileSystemModel(self);self.fs.setReadOnly(True);self.fs.setOption(QFileSystemModel.Option.DontUseCustomDirectoryIcons,True);self.fs.setFilter(QDir.Filter.AllDirs|QDir.Filter.NoDotAndDotDot|QDir.Filter.Drives);self.fs.setRootPath('')
         self.tree.setModel(self.fs);self.tree.setItemDelegate(TreeDelegate(self.tree));self.tree.setHeaderHidden(True);self.tree.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers);self.tree.setDragEnabled(False);self.tree.setAcceptDrops(False);self.tree.setUniformRowHeights(True);self.tree.setIndentation(14);self.tree.setColumnWidth(0,320);self.tree.setExpandsOnDoubleClick(True)
         for column in (1,2,3):self.tree.hideColumn(column)

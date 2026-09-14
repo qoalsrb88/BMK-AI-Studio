@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (QDialog,QVBoxLayout,QHBoxLayout,QLabel,QPushButto
     QGraphicsView,QGraphicsScene,QSpinBox,QComboBox,QDialogButtonBox,QPlainTextEdit,
     QListWidget,QListWidgetItem,QSplitter,QWidget)
 from .core import resize_image,tone_delta,apply_tone_delta
+from .appearance import CANVAS
 
 def line(*widgets):
     widget=QWidget();layout=QHBoxLayout(widget);layout.setContentsMargins(0,0,0,0)
@@ -18,7 +19,7 @@ def line(*widgets):
 
 class ImageCanvas(QGraphicsView):
     def __init__(self):
-        super().__init__();self.setScene(QGraphicsScene(self));self.setBackgroundBrush(QColor('#0d141d'))
+        super().__init__();self.setScene(QGraphicsScene(self));self.setBackgroundBrush(QColor(CANVAS))
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag);self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
     def display(self,image,fit=False):
         self.scene().clear();self.scene().addPixmap(QPixmap.fromImage(ImageQt(image.convert('RGBA'))))

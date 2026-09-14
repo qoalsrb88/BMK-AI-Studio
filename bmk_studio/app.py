@@ -13,10 +13,10 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
     QSplitter, QLabel, QPushButton, QLineEdit, QPlainTextEdit, QTabWidget, QListWidget,
     QListWidgetItem, QFileDialog, QMessageBox, QComboBox, QDoubleSpinBox, QSpinBox,
     QCheckBox, QGraphicsView, QGraphicsScene, QGraphicsRectItem, QAbstractItemView,
-    QDialog, QDialogButtonBox, QFormLayout, QProgressBar, QTreeWidget, QTreeWidgetItem, QScrollArea, QTabBar, QMenu, QSlider, QStackedWidget)
+    QDialog, QDialogButtonBox, QFormLayout, QProgressBar, QTreeWidget, QTreeWidgetItem, QScrollArea, QTabBar, QMenu, QSlider, QStackedWidget, QFrame)
 from .workspace import WorkspaceMixin
 from .discovery_ui import DiscoveryMixin
-from .appearance import apply_theme, decorate, icon
+from .appearance import apply_theme, decorate, icon, ghost, caption, CANVAS, CANVAS_TEXT
 from .crop_ui import CropInteraction,bounded_box,anchored_box,snap_value
 from . import data_location, __version__
 from .data_dialog import DataDirectoryDialog
@@ -39,19 +39,6 @@ from .gpu_tone import tone_restore_cuda
 from .color import normalize_source,high_precision
 from .stitch_dialog import StitchDialog
 from .dialogs import ResizeDialog, CompareDialog, MaskDialog, ToneDialog, RevisionDialog
-
-STYLE = '''
-QWidget { background:#171c24; color:#dce3ed; font-family:"Segoe UI","Malgun Gothic"; font-size:13px; }
-QMainWindow { background:#11161d; }
-QLineEdit,QPlainTextEdit,QListWidget,QListView,QTreeWidget,QComboBox,QSpinBox,QDoubleSpinBox { background:#10151d; border:1px solid #303b4c; border-radius:6px; padding:7px; selection-background-color:#285a71; }
-QPushButton { background:#263242; border:1px solid #3a4b60; border-radius:6px; padding:8px 11px; }
-QPushButton:hover { background:#35475c; } QPushButton:disabled { color:#667486; }
-QPushButton[primary="true"] { background:#176b65; border-color:#288d85; color:white; }
-QTabBar::tab { padding:10px 12px; color:#8f9fb2; } QTabBar::tab:selected { color:#74ddc9; border-bottom:2px solid #74ddc9; }
-QTabWidget::pane { border:0; } QSplitter::handle { background:#303b4c; }
-QListWidget::item,QListView::item { padding:10px 5px; } QListWidget::item:selected,QListView::item:selected { background:#233f4c; }
-QLabel#muted { color:#8f9fb2; } QStatusBar { background:#10151d; color:#8f9fb2; }
-'''
 
 def configure_app(app):
     # Also provides real glyphs on Qt's offscreen platform used for visual QA.
@@ -98,7 +85,7 @@ class Viewer(CropInteraction,QGraphicsView):
     def __init__(self):
         super().__init__()
         self.setScene(QGraphicsScene(self))
-        self.setBackgroundBrush(QColor('#0c1118'))
+        self.setBackgroundBrush(QColor(CANVAS))
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.crop_mode = False
@@ -111,7 +98,7 @@ class Viewer(CropInteraction,QGraphicsView):
         self.overscroll = 25
         self.init_crop()
         welcome=self.scene().addText('이미지와 프롬프트를 한곳에서\n\n이미지·폴더를 열거나 이 창으로 드롭하세요.\n\n원본 읽기 → 작업 프롬프트 → 편집 → 내보내기')
-        welcome.setDefaultTextColor(QColor('#92adbb'))
+        welcome.setDefaultTextColor(QColor(CANVAS_TEXT))
         welcome.setFont(QFont('Malgun Gothic',13))
     def display(self, image, fit=True):
         self.crop_drag=None;self.crop_pan=None;self.set_crop_box(None)
@@ -250,15 +237,15 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.statusBar().showMessage('이미지·폴더를 드롭하거나 Ctrl+O로 시작하세요. 원본 파일은 수정하지 않습니다.')
 
     def prompt_header(self,label,editor):
-        copy=button('',lambda:self.copy_text(editor.toPlainText()));decorate(copy,'copy')
+        copy=button('',lambda:self.copy_text(editor.toPlainText()));decorate(copy,'copy');ghost(copy)
         copy.setFixedSize(30,30);copy.setToolTip(label+' 전체 복사');copy.setAccessibleName(label+' 전체 복사')
         copy.setEnabled(bool(editor.toPlainText()))
         editor.textChanged.connect(lambda:copy.setEnabled(bool(editor.toPlainText())))
-        return row(QLabel(label),copy)
+        return row(caption(label,'field'),copy)
 
     def apply_appearance(self):
         apply_theme(QApplication.instance(),self.appearance.get('theme','light'))
-        self.viewer.setBackgroundBrush(QColor('#181818' if self.appearance.get('theme')=='dark' else '#e5e5e5'))
+        self.viewer.setBackgroundBrush(QColor(CANVAS))
         self.viewer.set_interpolation(self.appearance.get('interpolation','smooth'))
         try:self.viewer.overscroll=max(0,min(50,int(self.appearance.get('overscroll',25))))
         except (ValueError,TypeError):self.viewer.overscroll=25
@@ -341,19 +328,24 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
     def build(self):
         host = QWidget()
         outer = QVBoxLayout(host)
-        outer.setContentsMargins(18,15,18,10)
+        outer.setContentsMargins(12,8,12,6);outer.setSpacing(8)
         title = QLabel('BMK  /  AI STUDIO')
         title.setObjectName('brand')
         self.workspace_mode=QComboBox();self.workspace_mode.addItem('탐색 · 갤러리','browse');self.workspace_mode.addItem('작업 · 미리보기','work');self.workspace_mode.addItem('폴더 탐색','disk')
         self.workspace_mode.setAccessibleName('화면 모드');self.workspace_mode.currentIndexChanged.connect(self.switch_workspace)
-        self.settings_button=button('설정',self.open_settings);decorate(self.settings_button,'settings')
-        self.settings_button.setToolTip('전역 설정 · 테마 / 미리보기')
-        outer.addWidget(row(title,self.workspace_mode, button('이미지 추가',self.open_file),button('폴더 추가',self.open_folder),
-                            button('붙여넣기',self.paste),button('작업 폴더',lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.store.root)))),self.settings_button))
+        self.settings_button=button('',self.open_settings);decorate(self.settings_button,'settings');ghost(self.settings_button);self.settings_button.setFixedSize(34,34)
+        self.settings_button.setToolTip('전역 설정 · 테마 / 미리보기');self.settings_button.setAccessibleName('전역 설정')
+        # One header row: brand, main navigation (inserted by build_main_tabs), then natural-width global actions.
+        header=QFrame();header.setObjectName('header');self.header_layout=QHBoxLayout(header);self.header_layout.setContentsMargins(0,0,0,8);self.header_layout.setSpacing(8)
+        self.header_layout.addWidget(title);self.header_layout.addWidget(self.workspace_mode);self.header_layout.addStretch(1)
+        for text,fn,name in (('이미지 추가',self.open_file,'image'),('폴더 추가',self.open_folder,'folder'),('붙여넣기',self.paste,'paste'),
+                             ('작업 폴더',lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.store.root))),'external')):
+            item=button(text,fn);decorate(item,name);self.header_layout.addWidget(item)
+        self.header_layout.addWidget(self.settings_button);outer.addWidget(header)
         splitter = QSplitter();self.main_splitter=splitter
         outer.addWidget(splitter,1)
         left = QWidget(); ll = QVBoxLayout(left); ll.setContentsMargins(0,8,8,0)
-        ll.addWidget(QLabel('LIBRARY  ·  이미지 / 노트'))
+        ll.addWidget(caption('라이브러리','section'))
         self.search = QLineEdit(); self.search.setPlaceholderText('파일명·메타·작업·추정 태그 검색')
         self.search.textChanged.connect(self.search_changed); ll.addWidget(self.search)
         self.build_browser_controls(ll)
@@ -369,10 +361,10 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.restore_removed_button=button('목록 제거 되돌리기',self.undo_library_removal);self.restore_removed_button.setEnabled(False);decorate(self.restore_removed_button,'undo');ll.addWidget(self.restore_removed_button)
         self.watch_toggle=QCheckBox('열어 둔 폴더의 새 이미지 자동 수집')
         self.watch_toggle.toggled.connect(self.toggle_watch);ll.addWidget(self.watch_toggle)
-        self.library_status=QLabel('폴더를 열면 감시를 켤 수 있습니다.');self.library_status.setWordWrap(True);ll.addWidget(self.library_status)
+        self.library_status=caption('폴더를 열면 감시를 켤 수 있습니다.');self.library_status.setWordWrap(True);ll.addWidget(self.library_status);ll.addStretch(1)
         self.library.searching.connect(lambda active:self.library_status.setText('디스크 검색 중…' if active else f'{self.library.proxy.rowCount()} / {self.library.count()}개 이미지'))
         self.note_browser=QWidget();nl=QVBoxLayout(self.note_browser);nl.setContentsMargins(0,0,8,0)
-        nl.addWidget(QLabel('PROMPT NOTES'))
+        nl.addWidget(caption('프롬프트 노트','section'))
         self.note_search=QLineEdit();self.note_search.setPlaceholderText('노트만 검색');self.note_search.textChanged.connect(self.refresh_notes);nl.addWidget(self.note_search)
         self.notes = QTreeWidget();self.notes.setHeaderHidden(True); self.notes.itemClicked.connect(self.open_note); nl.addWidget(self.notes,2)
         self.show_archived=QCheckBox('보관함 보기');self.show_archived.toggled.connect(self.refresh_notes);nl.addWidget(self.show_archived)
@@ -397,13 +389,13 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.viewer.interpolationChanged.connect(self.save_interpolation)
         cl.addWidget(row(button('보기 / 복사 / 보관',self.viewer_actions),button('작업본 내보내기',self.export_image,True)))
         center_layout.addWidget(center,1);center_layout.addWidget(self.library,1)
-        self.save_status=QLabel('텍스트 저장됨');self.save_status.setWordWrap(True);center_layout.addWidget(self.save_status)
-        self.jobs_status=QLabel('작업 대기');center_layout.addWidget(self.jobs_status)
+        self.save_status=caption('텍스트 저장됨');self.save_status.setWordWrap(True);center_layout.addWidget(self.save_status)
+        self.jobs_status=caption('작업 대기');center_layout.addWidget(self.jobs_status)
         splitter.addWidget(center_host)
         self.tabs=QTabWidget(); splitter.addWidget(self.tabs)
         splitter.setSizes([240,730,510])
         original_page=QWidget(); ol=QVBoxLayout(original_page)
-        self.source=QLabel('원본 메타데이터'); self.source.setWordWrap(True); ol.addWidget(self.source)
+        self.source=caption('원본 메타데이터'); self.source.setWordWrap(True); ol.addWidget(self.source)
         self.positive=QPlainTextEdit(); self.positive.setReadOnly(True); self.positive.setPlaceholderText('파일에 저장된 프롬프트')
         self.negative=QPlainTextEdit(); self.negative.setReadOnly(True); self.negative.setPlaceholderText('파일에 저장된 네거티브')
         ol.addWidget(self.prompt_header('프롬프트',self.positive));ol.addWidget(self.positive,3)

@@ -7,6 +7,7 @@ from PySide6.QtGui import QPixmap,QIcon,QColor
 from PySide6.QtWidgets import (QWidget,QVBoxLayout,QLineEdit,QComboBox,QLabel,QListView,QAbstractItemView,QSplitter,QPlainTextEdit,QFileDialog,QSlider,QTabWidget,QStyle)
 from .core import EXTENSIONS,load_image,inspect_image,json_text,file_stamp
 from .workspace import line,action
+from .appearance import CANVAS,caption
 from .explorer_navigation import ExplorerView,NavigationPane
 
 
@@ -74,7 +75,7 @@ class DiskBrowser(QWidget):
         self.split=QSplitter();layout.addWidget(self.split,1)
         self.view=ExplorerView(self);self.view.setViewMode(QListView.ViewMode.IconMode);self.view.setMovement(QListView.Movement.Static);self.view.setResizeMode(QListView.ResizeMode.Adjust);self.view.setUniformItemSizes(True);self.view.setLayoutMode(QListView.LayoutMode.Batched);self.view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection);self.view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.model=DiskModel(self);self.proxy=DiskProxy(self);self.proxy.setSourceModel(self.model);self.view.setModel(self.proxy);self.navigation=NavigationPane(self);self.split.addWidget(self.navigation);self.split.addWidget(self.view)
-        side=QWidget();right=QVBoxLayout(side);self.label=QLabel('이미지를 선택하면 원본을 미리 봅니다.');self.label.setWordWrap(True);right.addWidget(self.label)
+        side=QWidget();right=QVBoxLayout(side);self.label=caption('이미지를 선택하면 원본을 미리 봅니다.');self.label.setWordWrap(True);right.addWidget(self.label)
         self.viewer=viewer_class();self.viewer.display(None);right.addWidget(self.viewer,3);right.addWidget(line(action('화면 맞춤',self.viewer.fit),action('100%',self.viewer.actual_size)))
         self.info_tabs=QTabWidget();right.addWidget(self.info_tabs,2)
         self.positive=QPlainTextEdit();self.negative=QPlainTextEdit();self.metadata=QPlainTextEdit()
@@ -84,7 +85,7 @@ class DiskBrowser(QWidget):
         if not isinstance(sizes,list) or len(sizes)!=3:sizes=[220,660,400]
         self.split.setSizes(sizes)
         self.size=QSlider(Qt.Orientation.Horizontal);self.size.setRange(64,320);self.size.setValue(self.state.get('size',160));self.size.setAccessibleName('폴더 썸네일 크기')
-        self.status=QLabel('주소를 입력하거나 폴더를 선택하세요. 원본과 라이브러리는 자동 변경되지 않습니다.');self.status.setWordWrap(True);layout.addWidget(line(QLabel('썸네일'),self.size));layout.addWidget(self.status)
+        self.status=caption('주소를 입력하거나 폴더를 선택하세요. 원본과 라이브러리는 자동 변경되지 않습니다.');self.status.setWordWrap(True);layout.addWidget(line(QLabel('썸네일'),self.size));layout.addWidget(self.status)
         self.address.returnPressed.connect(lambda:self.navigate(self.address.text()));self.search.textChanged.connect(self.filter_changed);self.sort.currentIndexChanged.connect(self.filter_changed);self.size.valueChanged.connect(self.resize_icons);self.resize_icons()
         self.view.doubleClicked.connect(self.activate);self.view.selectionModel().currentChanged.connect(self.selection_changed);self.view.selectionModel().selectionChanged.connect(self.selection_count)
         self.timer=QTimer(self);self.timer.setInterval(70);self.timer.timeout.connect(self.start_thumbnails)
@@ -93,7 +94,7 @@ class DiskBrowser(QWidget):
     def set_active(self,on):
         self.active=on
         if on:
-            self.timer.start();self.viewer.set_interpolation(self.owner.viewer.interpolation);self.viewer.overscroll=self.owner.viewer.overscroll;self.viewer.setBackgroundBrush(QColor('#181818' if self.owner.appearance.get('theme')=='dark' else '#e5e5e5'))
+            self.timer.start();self.viewer.set_interpolation(self.owner.viewer.interpolation);self.viewer.overscroll=self.owner.viewer.overscroll;self.viewer.setBackgroundBrush(QColor(CANVAS))
             if not self.folder and self.state.get('folder'):self.navigate(self.state['folder'])
             elif self.folder and not self.model.rows:self.navigate(self.folder,refresh=True)
             elif self.preview_path and self.viewer.pixmap_item is None:self.preview_timer.start()

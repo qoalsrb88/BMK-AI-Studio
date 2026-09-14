@@ -2,16 +2,17 @@
 from PySide6.QtWidgets import QWidget,QVBoxLayout,QSplitter,QTabBar,QDialog,QLabel,QPlainTextDocumentLayout,QScrollArea
 from PySide6.QtGui import QTextDocument,QTextCursor
 from .workspace import action,line
+from .appearance import caption
 
 class MainTabsMixin:
     def build_main_tabs(self,outer):
         self.main_switching=False;self.editor_contexts={};self.last_note_index=1;self.last_image_mode=0
-        self.main_tabs=QTabBar();self.main_tabs.setExpanding(False)
+        self.main_tabs=QTabBar();self.main_tabs.setExpanding(False);self.main_tabs.setDrawBase(False);self.main_tabs.setObjectName('mainNav')
         for title in ('파일 탐색','이미지 라이브러리','노트'):self.main_tabs.addTab(title)
-        self.main_tabs.setCurrentIndex(1);outer.insertWidget(0,self.main_tabs)
+        self.main_tabs.setCurrentIndex(1);self.header_layout.insertWidget(1,self.main_tabs)
         self.notes_page=QSplitter();self.notes_page.addWidget(self.note_browser);self.note_editor_host=QWidget();self.note_editor_layout=QVBoxLayout(self.note_editor_host);self.note_editor_scroll=QScrollArea();self.note_editor_scroll.setWidgetResizable(True);self.note_editor_scroll.setWidget(self.note_editor_host);self.notes_page.addWidget(self.note_editor_scroll);self.notes_page.setSizes([300,1000]);self.notes_page.hide();outer.addWidget(self.notes_page,1)
         self.open_saved_note=action('저장한 노트 열기',self.open_transferred_note);self.open_saved_note.hide();outer.addWidget(self.open_saved_note)
-        self.image_view_modes=QTabBar();self.image_view_modes.addTab('갤러리');self.image_view_modes.addTab('큰 미리보기');self.image_view_modes.currentChanged.connect(lambda i:self.workspace_mode.setCurrentIndex(i));self.image_work_layout.insertWidget(0,QLabel('이미지에 연결된 작업 프롬프트'))
+        self.image_view_modes=QTabBar();self.image_view_modes.addTab('갤러리');self.image_view_modes.addTab('큰 미리보기');self.image_view_modes.currentChanged.connect(lambda i:self.workspace_mode.setCurrentIndex(i));self.image_work_layout.insertWidget(0,caption('이미지에 연결된 작업 프롬프트'))
         self.main_splitter.widget(1).layout().insertWidget(0,self.image_view_modes)
         self.note_send_button=action('현재 이미지의 작업 프롬프트로 보내기…',self.note_to_image);self.note_editor_layout.addWidget(self.note_send_button)
         self.main_tabs.currentChanged.connect(self.change_main_tab);self.workspace_mode.hide();self.apply_main_visibility()
