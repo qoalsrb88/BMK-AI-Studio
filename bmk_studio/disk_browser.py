@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt,QAbstractListModel,QModelIndex,QSize,QSortFilterPr
 from PySide6.QtGui import QPixmap,QIcon,QColor
 from PySide6.QtWidgets import (QWidget,QVBoxLayout,QLineEdit,QComboBox,QLabel,QListView,QAbstractItemView,QSplitter,QPlainTextEdit,QFileDialog,QSlider,QTabWidget,QStyle)
 from .core import EXTENSIONS,load_image,inspect_image,json_text,file_stamp
-from .workspace import line,action
+from .workspace import line,action,bar
 from .appearance import CANVAS,caption
 from .explorer_navigation import ExplorerView,NavigationPane
 
@@ -70,13 +70,13 @@ class DiskBrowser(QWidget):
         layout.addWidget(line(self.back,self.forward,action('↑ 상위',lambda:self.navigate(str(Path(self.folder).parent)) if self.folder else None),self.address,action('이동',lambda:self.navigate(self.address.text())),action('폴더 선택',self.choose),action('새로고침',lambda:self.navigate(self.folder,refresh=True))))
         self.favorites=QComboBox();self.favorites.setMinimumContentsLength(12);self.favorites.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon);self.favorites.setMaximumWidth(240);self.refresh_favorites();self.favorites.activated.connect(lambda i:self.navigate(self.favorites.itemData(i)) if i else None)
         self.search=QLineEdit();self.search.setPlaceholderText('현재 폴더의 이름 검색 · 하위 폴더 제외');self.sort=QComboBox();self.sort.addItems(['이름 ↑','이름 ↓','수정일 ↑','수정일 ↓','크기 ↑','크기 ↓'])
-        self.add=action('선택 이미지를 라이브러리에 추가',self.add_selected);self.add.setEnabled(False)
+        self.add=action('선택 이미지를 라이브러리에 추가',self.add_selected);self.add.setProperty('primary',True);self.add.setEnabled(False)
         layout.addWidget(line(self.favorites,action('☆ 경로 저장 / 해제',self.toggle_favorite),self.search,self.sort,self.add))
         self.split=QSplitter();layout.addWidget(self.split,1)
         self.view=ExplorerView(self);self.view.setViewMode(QListView.ViewMode.IconMode);self.view.setMovement(QListView.Movement.Static);self.view.setResizeMode(QListView.ResizeMode.Adjust);self.view.setUniformItemSizes(True);self.view.setLayoutMode(QListView.LayoutMode.Batched);self.view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection);self.view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.model=DiskModel(self);self.proxy=DiskProxy(self);self.proxy.setSourceModel(self.model);self.view.setModel(self.proxy);self.navigation=NavigationPane(self);self.split.addWidget(self.navigation);self.split.addWidget(self.view)
-        side=QWidget();right=QVBoxLayout(side);self.label=caption('이미지를 선택하면 원본을 미리 봅니다.');self.label.setWordWrap(True);right.addWidget(self.label)
-        self.viewer=viewer_class();self.viewer.display(None);right.addWidget(self.viewer,3);right.addWidget(line(action('화면 맞춤',self.viewer.fit),action('100%',self.viewer.actual_size)))
+        side=QWidget();right=QVBoxLayout(side);self.side_layout=right;self.label=caption('원본 미리보기','field');self.label.setWordWrap(True);right.addWidget(self.label)
+        self.viewer=viewer_class();self.viewer.placeholder='이미지를 선택하면 원본을 여기에서 미리 봅니다.';self.viewer.display(None);right.addWidget(self.viewer,3);right.addWidget(line(action('화면 맞춤',self.viewer.fit),action('100%',self.viewer.actual_size)))
         self.info_tabs=QTabWidget();right.addWidget(self.info_tabs,2)
         self.positive=QPlainTextEdit();self.negative=QPlainTextEdit();self.metadata=QPlainTextEdit()
         for title,editor in [('프롬프트',self.positive),('네거티브',self.negative),('전체 정보',self.metadata)]:
@@ -85,7 +85,7 @@ class DiskBrowser(QWidget):
         if not isinstance(sizes,list) or len(sizes)!=3:sizes=[220,660,400]
         self.split.setSizes(sizes)
         self.size=QSlider(Qt.Orientation.Horizontal);self.size.setRange(64,320);self.size.setValue(self.state.get('size',160));self.size.setAccessibleName('폴더 썸네일 크기')
-        self.status=caption('주소를 입력하거나 폴더를 선택하세요. 원본과 라이브러리는 자동 변경되지 않습니다.');self.status.setWordWrap(True);layout.addWidget(line(QLabel('썸네일'),self.size));layout.addWidget(self.status)
+        self.status=caption('주소를 입력하거나 폴더를 선택하세요. 원본과 라이브러리는 자동 변경되지 않습니다.');self.status.setWordWrap(True);self.size.setFixedWidth(140);self.size.setToolTip('썸네일 크기 · Ctrl+휠');layout.addWidget(bar((self.status,1),caption('썸네일'),self.size))
         self.address.returnPressed.connect(lambda:self.navigate(self.address.text()));self.search.textChanged.connect(self.filter_changed);self.sort.currentIndexChanged.connect(self.filter_changed);self.size.valueChanged.connect(self.resize_icons);self.resize_icons()
         self.view.doubleClicked.connect(self.activate);self.view.selectionModel().currentChanged.connect(self.selection_changed);self.view.selectionModel().selectionChanged.connect(self.selection_count)
         self.timer=QTimer(self);self.timer.setInterval(70);self.timer.timeout.connect(self.start_thumbnails)
@@ -121,7 +121,7 @@ class DiskBrowser(QWidget):
             value,error=result
             if error:self.status.setText('폴더를 열 수 없습니다: '+error);self.address.setText(self.folder);return
             if value is None:self.status.setText('폴더 읽기가 취소되었습니다. 새로고침으로 다시 읽을 수 있습니다.');return
-            rows,skipped=value;self.folder=folder;self.address.setText(folder);self.icons.clear();self.model.replace(rows);self.search.clear();self.filter_changed();self.viewer.display(None);self.metadata.clear();self.positive.clear();self.negative.clear();self.preview_path=None;self.label.setText('이미지를 선택하면 원본을 미리 봅니다.')
+            rows,skipped=value;self.folder=folder;self.address.setText(folder);self.icons.clear();self.model.replace(rows);self.search.clear();self.filter_changed();self.viewer.display(None);self.metadata.clear();self.positive.clear();self.negative.clear();self.preview_path=None;self.label.setText('원본 미리보기')
             if history_at is not None:self.history_at=history_at
             elif not refresh and (self.history_at<0 or self.history[self.history_at]!=folder):self.history=self.history[:self.history_at+1]+[folder];self.history_at=len(self.history)-1
             self.update_navigation();self.navigation.sync();self.save();self.status.setText(f'{len(rows)}개 항목 · 접근 불가 {skipped}개 · 현재 폴더만 표시');self.selection_count()

@@ -8,15 +8,17 @@ from pathlib import Path
 from PIL import Image
 from PIL.ImageQt import ImageQt
 from PySide6.QtCore import Qt, QThread, Signal, QMimeData, QUrl, QRectF, QTimer, QSettings, QSize
-from PySide6.QtGui import QPixmap, QColor, QPen, QKeySequence, QAction, QActionGroup, QPainter, QDesktopServices, QFontDatabase, QFont, QTextCursor, QIcon
+from PySide6.QtGui import QPixmap, QColor, QPen, QKeySequence, QAction, QActionGroup, QPainter, QDesktopServices, QFontDatabase, QFont, QTextCursor, QIcon, QTextOption
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QSplitter, QLabel, QPushButton, QLineEdit, QPlainTextEdit, QTabWidget, QListWidget,
     QListWidgetItem, QFileDialog, QMessageBox, QComboBox, QDoubleSpinBox, QSpinBox,
     QCheckBox, QGraphicsView, QGraphicsScene, QGraphicsRectItem, QAbstractItemView,
     QDialog, QDialogButtonBox, QFormLayout, QProgressBar, QTreeWidget, QTreeWidgetItem, QScrollArea, QTabBar, QMenu, QSlider, QStackedWidget, QFrame)
-from .workspace import WorkspaceMixin
+from .workspace import WorkspaceMixin, bar
 from .discovery_ui import DiscoveryMixin
 from .appearance import apply_theme, decorate, icon, ghost, caption, CANVAS, CANVAS_TEXT
+from .hints import HintListWidget
+from .background import JobCenter
 from .crop_ui import CropInteraction,bounded_box,anchored_box,snap_value
 from . import data_location, __version__
 from .data_dialog import DataDirectoryDialog
@@ -82,7 +84,9 @@ class Job(QThread):
 class Viewer(CropInteraction,QGraphicsView):
     cropChanged = Signal(object)
     interpolationChanged = Signal(str)
-    def __init__(self):
+    zoomChanged = Signal(float)
+    WELCOME='이미지와 프롬프트를 한곳에서\n\n이미지·폴더를 열거나 이 창으로 드롭하세요.\n\n원본 읽기 → 작업 프롬프트 → 편집 → 내보내기'
+    def __init__(self, placeholder=WELCOME):
         super().__init__()
         self.setScene(QGraphicsScene(self))
         self.setBackgroundBrush(QColor(CANVAS))
@@ -97,9 +101,20 @@ class Viewer(CropInteraction,QGraphicsView):
         self.interpolation = 'smooth'
         self.overscroll = 25
         self.init_crop()
-        welcome=self.scene().addText('이미지와 프롬프트를 한곳에서\n\n이미지·폴더를 열거나 이 창으로 드롭하세요.\n\n원본 읽기 → 작업 프롬프트 → 편집 → 내보내기')
-        welcome.setDefaultTextColor(QColor(CANVAS_TEXT))
-        welcome.setFont(QFont('Malgun Gothic',13))
+        self.placeholder=placeholder
+        self.show_placeholder()
+    def show_placeholder(self):
+        """Centred hint on the empty canvas; the scene rect is reset so it is not offset by a previous image."""
+        if self.pixmap_item is not None:return
+        self.scene().clear();self.scene().setSceneRect(QRectF());self.resetTransform()
+        if not self.placeholder:return
+        item=self.scene().addText(self.placeholder);item.setDefaultTextColor(QColor(CANVAS_TEXT));item.setFont(QFont('Malgun Gothic',13))
+        item.setTextWidth(min(460,max(200,self.viewport().width()-48)))
+        option=item.document().defaultTextOption();option.setAlignment(Qt.AlignmentFlag.AlignCenter);item.document().setDefaultTextOption(option)
+        # Explicit rect: the automatic scene rect only ever grows, which would leave scrollbars behind.
+        self.scene().setSceneRect(item.sceneBoundingRect())
+    def announce_zoom(self):
+        self.zoomChanged.emit(self.transform().m11() if self.pixmap_item is not None else 0.0)
     def display(self, image, fit=True):
         self.crop_drag=None;self.crop_pan=None;self.set_crop_box(None)
         self.image_rect=QRectF()
@@ -108,6 +123,7 @@ class Viewer(CropInteraction,QGraphicsView):
         self.crop_item = None
         self.origin = None
         if image is None:
+            self.show_placeholder();self.announce_zoom()
             return
         pix = QPixmap.fromImage(ImageQt(image.convert('RGBA')))
         self.pixmap_item = self.scene().addPixmap(pix)
@@ -115,14 +131,14 @@ class Viewer(CropInteraction,QGraphicsView):
         self.image_rect = QRectF(0,0,image.width,image.height)
         self.scene().setSceneRect(self.image_rect)
         if fit: self.fit()
-        else:self.update_scroll_margin()
+        else:self.update_scroll_margin();self.announce_zoom()
     def fit(self):
         if self.image_rect.isEmpty():return
         self.scene().setSceneRect(self.image_rect)
         self.fitInView(self.image_rect, Qt.AspectRatioMode.KeepAspectRatio)
-        self.update_scroll_margin();self.centerOn(self.image_rect.center())
+        self.update_scroll_margin();self.centerOn(self.image_rect.center());self.announce_zoom()
     def actual_size(self):
-        self.resetTransform();self.update_scroll_margin();self.centerOn(self.image_rect.center())
+        self.resetTransform();self.update_scroll_margin();self.centerOn(self.image_rect.center());self.announce_zoom()
     def update_scroll_margin(self):
         if self.image_rect.isEmpty():return
         scale=max(self.transform().m11(),.00001)
@@ -133,6 +149,7 @@ class Viewer(CropInteraction,QGraphicsView):
     def resizeEvent(self,event):
         super().resizeEvent(event)
         if hasattr(self,'image_rect'):self.update_scroll_margin()
+        if getattr(self,'pixmap_item',None) is None and getattr(self,'placeholder',None):self.show_placeholder()
     def set_interpolation(self,mode):
         self.interpolation=mode if mode in ('nearest','smooth') else 'smooth'
         smooth=self.interpolation=='smooth'
@@ -153,7 +170,7 @@ class Viewer(CropInteraction,QGraphicsView):
     def wheelEvent(self,event):
         factor = 1.2 if event.angleDelta().y()>0 else 1/1.2
         if .01<=self.transform().m11()*factor<=64:
-            self.scale(factor,factor);self.update_scroll_margin()
+            self.scale(factor,factor);self.update_scroll_margin();self.announce_zoom()
 
 class CheckpointWait(QDialog):
     def reject(self):pass
@@ -257,7 +274,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         for i,name in enumerate(('image','note','tag','edit','info')):self.tabs.setTabIcon(i,icon(name))
 
     def resize_thumbnails(self,size):
-        self.library.set_thumbnail_size(64 if getattr(self,'active_workspace',None)=='work' else size);self.thumbnail_label.setText(f'갤러리 {size}px')
+        self.library.set_thumbnail_size(64 if getattr(self,'active_workspace',None)=='work' else size);self.thumbnail_label.setText(f'{size}px')
         if hasattr(self,'appearance'):
             self.appearance['thumbnail_size']=size;self.store.state('appearance',self.appearance)
 
@@ -354,9 +371,9 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.library.itemClicked.connect(lambda item:self.safe(lambda:self.load(item.data(Qt.ItemDataRole.UserRole))))
         self.library.removeRequested.connect(lambda path:self.remove_library_paths([path]))
         self.library.doubleClicked.connect(lambda index:self.workspace_mode.setCurrentIndex(1))
-        self.thumbnail_label=QLabel('썸네일 64px');self.thumbnail_slider=QSlider(Qt.Orientation.Horizontal)
-        self.thumbnail_slider.setRange(40,512);self.thumbnail_slider.setValue(64);self.thumbnail_slider.setAccessibleName('갤러리 썸네일 크기')
-        self.thumbnail_slider.valueChanged.connect(self.resize_thumbnails);ll.addWidget(row(self.thumbnail_label,self.thumbnail_slider))
+        self.thumbnail_label=caption('64px');self.thumbnail_slider=QSlider(Qt.Orientation.Horizontal);self.thumbnail_slider.setFixedWidth(110)
+        self.thumbnail_slider.setRange(40,512);self.thumbnail_slider.setValue(64);self.thumbnail_slider.setAccessibleName('갤러리 썸네일 크기');self.thumbnail_slider.setToolTip('갤러리 썸네일 크기')
+        self.thumbnail_slider.valueChanged.connect(self.resize_thumbnails)
         ll.addWidget(button('선택 항목을 목록에서 제거',self.remove_library_selection))
         self.restore_removed_button=button('목록 제거 되돌리기',self.undo_library_removal);self.restore_removed_button.setEnabled(False);decorate(self.restore_removed_button,'undo');ll.addWidget(self.restore_removed_button)
         self.watch_toggle=QCheckBox('열어 둔 폴더의 새 이미지 자동 수집')
@@ -372,25 +389,31 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         nl.addWidget(button('노트 폴더 가져오기',self.import_note_folder))
         self.notes.setMinimumHeight(150)
         sidebar=QScrollArea();sidebar.setWidgetResizable(True);sidebar.setWidget(left);sidebar.setMinimumWidth(245);splitter.addWidget(sidebar)
-        center_host=QWidget();center_layout=QVBoxLayout(center_host);center_layout.setContentsMargins(6,8,6,0)
-        self.selection_label=QLabel('선택 0개');self.browser_count=QLabel('0개')
+        center_host=QWidget();center_layout=QVBoxLayout(center_host);center_layout.setContentsMargins(6,0,6,0)
+        self.selection_label=caption('선택 0개');self.browser_count=QLabel('0개')
         self.selection_actions=button('선택 작업',self.selection_menu)
-        self.sort_order=QComboBox();self.sort_order.addItems(['추가 순서','파일명 ↑','파일명 ↓'])
+        self.sort_order=QComboBox();self.sort_order.addItems(['추가 순서','파일명 ↑','파일명 ↓']);self.sort_order.setToolTip('정렬')
         self.sort_order.currentIndexChanged.connect(lambda i:self.library.proxy.sort(-1 if i==0 else 0,Qt.SortOrder.DescendingOrder if i==2 else Qt.SortOrder.AscendingOrder))
-        center_layout.addWidget(row(self.browser_count,self.selection_label,self.selection_actions,self.sort_order))
+        self.pin_button=button('A 고정',self.pin_compare);self.pin_button.setToolTip('현재 이미지를 비교 기준 A로 고정')
         self.compare_button=button('A/B 비교',self.compare_selection)
-        self.inspector_toggle=QCheckBox('정보 패널');self.inspector_toggle.setChecked(True)
+        self.inspector_toggle=QPushButton();self.inspector_toggle.setCheckable(True);self.inspector_toggle.setChecked(True);ghost(self.inspector_toggle);decorate(self.inspector_toggle,'info');self.inspector_toggle.setFixedSize(32,32)
+        self.inspector_toggle.setToolTip('정보 패널 표시 / 숨기기');self.inspector_toggle.setAccessibleName('정보 패널')
         self.inspector_toggle.toggled.connect(lambda on:self.tabs.setVisible(on))
-        center_layout.addWidget(row(button('현재 이미지 A로 고정',self.pin_compare),self.compare_button,self.inspector_toggle))
+        # One gallery toolbar: view-mode tabs (inserted by build_main_tabs), counts, then actions and view options.
+        self.gallery_toolbar=bar(self.browser_count,self.selection_label,None,self.selection_actions,self.sort_order,self.pin_button,self.compare_button,self.thumbnail_label,self.thumbnail_slider,self.inspector_toggle)
+        center_layout.addWidget(self.gallery_toolbar)
         center = QWidget();self.preview_panel=center;cl=QVBoxLayout(center);cl.setContentsMargins(0,0,0,0)
         self.file_label=QLabel('이미지를 여기에 놓으세요'); self.file_label.setWordWrap(True); cl.addWidget(self.file_label)
         self.viewer=Viewer(); self.viewer.cropChanged.connect(self.set_box); cl.addWidget(self.viewer,1)
-        cl.addWidget(row(button('화면 맞춤',self.viewer.fit),button('100%',self.viewer.actual_size),button('실행 취소',self.undo)))
+        self.zoom_label=caption('—');self.zoom_label.setMinimumWidth(44);self.zoom_label.setToolTip('현재 확대율')
+        self.viewer.zoomChanged.connect(lambda z:self.zoom_label.setText(f'{z*100:.0f}%' if z>0 else '—'))
         self.viewer.interpolationChanged.connect(self.save_interpolation)
-        cl.addWidget(row(button('보기 / 복사 / 보관',self.viewer_actions),button('작업본 내보내기',self.export_image,True)))
+        cl.addWidget(bar(button('화면 맞춤',self.viewer.fit),button('100%',self.viewer.actual_size),self.zoom_label,None,button('실행 취소',self.undo),button('보기 / 복사 / 보관',self.viewer_actions),button('작업본 내보내기',self.export_image,True)))
         center_layout.addWidget(center,1);center_layout.addWidget(self.library,1)
-        self.save_status=caption('텍스트 저장됨');self.save_status.setWordWrap(True);center_layout.addWidget(self.save_status)
-        self.jobs_status=caption('작업 대기');center_layout.addWidget(self.jobs_status)
+        # Save and job state live in the status bar; the job segment opens the job list.
+        self.save_status=caption('텍스트 저장됨');self.statusBar().addPermanentWidget(self.save_status)
+        self.jobs_status=QPushButton('작업 대기');ghost(self.jobs_status);self.jobs_status.setToolTip('진행 중인 작업 목록 열기');self.jobs_status.clicked.connect(lambda:JobCenter(self).exec())
+        self.statusBar().addPermanentWidget(self.jobs_status)
         splitter.addWidget(center_host)
         self.tabs=QTabWidget(); splitter.addWidget(self.tabs)
         splitter.setSizes([240,730,510])
@@ -424,7 +447,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.image_note_save=button('노트에 저장…',self.save_image_to_note);wl.addWidget(self.image_note_save)
         ol.addWidget(button('노트에 저장…',self.save_image_to_note))
         self.tabs.addTab(work,'작업 프롬프트')
-        tags=QWidget(); tl=QVBoxLayout(tags);tl.addWidget(button('노트에 저장…',self.save_image_to_note))
+        tags=QWidget(); tl=QVBoxLayout(tags)
         default_model=''
         local=Path(__file__).resolve().parent.parent/'local-settings.json'
         if local.is_file():
@@ -449,11 +472,11 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         tl.addWidget(row(QLabel('추론 배치 크기'),self.batch_size,self.cancel_button))
         self.tag_progress=QProgressBar();self.tag_progress.setRange(0,1);self.tag_progress.setValue(0);tl.addWidget(self.tag_progress)
         tl.addWidget(button('태깅 모델 메모리 해제',self.unload_tagger))
-        self.tag_list=QListWidget();self.tag_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection);tl.addWidget(self.tag_list,1)
+        self.tag_list=HintListWidget('아직 추정 태그가 없습니다.\n모델 폴더를 지정하고 현재 원본 태깅을 누르면 결과가 여기에 표시됩니다.');self.tag_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection);tl.addWidget(self.tag_list,1)
         tl.addWidget(row(button('표시 태그 복사',lambda:self.copy_text(self.tag_text())),button('선택 태그 추가',self.append_tags)))
         self.tag_status=QLabel('WD v3 · GPU 자동 선택 · 임계값 변경 시 재추론 없음');self.tag_status.setWordWrap(True);tl.addWidget(self.tag_status)
         self.job_log=QPlainTextEdit();self.job_log.setReadOnly(True);self.job_log.setMaximumBlockCount(200);self.job_log.setMaximumHeight(95);self.job_log.setPlaceholderText('일괄 처리 결과 / 오류');tl.addWidget(self.job_log)
-        tl.addWidget(button('현재 추정 태그 JSON 내보내기',self.export_tags))
+        tl.addWidget(row(button('노트에 저장…',self.save_image_to_note),button('현재 추정 태그 JSON 내보내기',self.export_tags)))
         self.model_path.textChanged.connect(self.refresh_saved_tags)
         self.tabs.addTab(tags,'태깅')
         edit=QWidget(); edit_layout=QVBoxLayout(edit)
@@ -518,7 +541,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         from .disk_browser import DiskBrowser
         self.disk_browser=DiskBrowser(self,Viewer);self.disk_browser.hide();outer.addWidget(self.disk_browser,1)
         self.build_main_tabs(outer)
-        self.disk_browser.layout().insertWidget(2,button('이 이미지의 프롬프트를 노트에 저장…',lambda:self.save_image_to_note(True)))
+        self.disk_browser.side_layout.addWidget(button('프롬프트를 노트에 저장…',lambda:self.save_image_to_note(True)))
         self.setCentralWidget(host)
         self.autosave=QTimer(self);self.autosave.setSingleShot(True);self.autosave.setInterval(600);self.autosave.timeout.connect(self.save_draft)
         for editor in (self.draft,self.draft_negative,self.memo): editor.textChanged.connect(lambda:self.autosave.start() if not self.loading else None)

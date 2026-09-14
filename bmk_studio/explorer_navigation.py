@@ -5,6 +5,7 @@ from PySide6.QtCore import Qt,QSize,QDir,QModelIndex,QStandardPaths,QEvent
 from PySide6.QtGui import QIcon,QKeySequence,QShortcut
 from PySide6.QtWidgets import (QListView,QStyledItemDelegate,QStyleOptionViewItem,QStyle,QWidget,QVBoxLayout,QLabel,QTreeView,QFileSystemModel,QAbstractItemView,QListWidget,QListWidgetItem)
 from .appearance import caption
+from .hints import paint_hint
 
 class CardDelegate(QStyledItemDelegate):
     def sizeHint(self,option,index):return self.parent().gridSize()
@@ -31,6 +32,15 @@ class ExplorerView(QListView):
         if event.key() in (Qt.Key.Key_Return,Qt.Key.Key_Enter):self.panel.activate(self.currentIndex());event.accept();return
         if event.key()==Qt.Key.Key_Backspace:self.panel.travel(-1);event.accept();return
         super().keyPressEvent(event)
+    def paintEvent(self,event):
+        super().paintEvent(event)
+        if self.model() is None or self.model().rowCount():return
+        panel=self.panel
+        if not panel.folder:text='주소를 입력하거나 왼쪽 트리에서 폴더를 선택하세요.'
+        elif panel.scan_job:text='폴더를 읽는 중…'
+        elif panel.model.rows:text='이름 검색에 맞는 항목이 없습니다.'
+        else:text='이 폴더에는 표시할 이미지나 하위 폴더가 없습니다.'
+        paint_hint(self,text)
 
 class TreeDelegate(QStyledItemDelegate):
     def initStyleOption(self,option,index):

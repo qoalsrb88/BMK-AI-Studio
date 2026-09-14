@@ -119,6 +119,7 @@ def stylesheet(t):
     QPushButton[ghost="true"] {{ background:transparent; border:1px solid transparent; padding:4px; }}
     QPushButton[ghost="true"]:hover {{ background:{surface2}; }}
     QPushButton[ghost="true"]:pressed {{ background:{selected}; }}
+    QPushButton[ghost="true"]:checked {{ background:{selected}; border-color:{border}; }}
     QPushButton[ghost="true"]:disabled {{ background:transparent; }}
     QCheckBox, QRadioButton {{ spacing:8px; padding:3px 0; }}
     QCheckBox::indicator, QRadioButton::indicator {{ width:16px; height:16px; border:1px solid {muted}; border-radius:4px; background:{surface}; }}

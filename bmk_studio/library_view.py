@@ -7,6 +7,8 @@ from .library_disk import ThumbnailPages,SearchJob
 
 ROLE=Qt.ItemDataRole
 
+from .hints import paint_hint
+
 class LibraryItem:
     def __init__(self,view,title,path):
         self.view=view;self.title=title;self.path=path;self.search=title.casefold();self.blob=b'';self.position=-1
@@ -94,6 +96,13 @@ class LibraryView(QListView):
         self.proxy.layoutChanged.connect(self.hide_remove)
     def hide_remove(self,*args):
         self.remove_button.hide();self.hover_path=None
+    def paintEvent(self,event):
+        super().paintEvent(event)
+        if self.proxy.rowCount():return
+        if self.search_pending:text='검색 중…'
+        elif self.count()==0:text='라이브러리가 비어 있습니다.\n이미지나 폴더를 이 창에 드롭하거나 상단의 이미지 추가 / 폴더 추가를 누르세요.'
+        else:text='조건에 맞는 이미지가 없습니다.\n검색어나 필터를 확인하거나 모두 해제를 누르세요.'
+        paint_hint(self,text)
     def startDrag(self,actions):
         import json
         from PySide6.QtCore import QMimeData

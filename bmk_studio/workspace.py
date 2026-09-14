@@ -14,6 +14,15 @@ def line(*widgets):
 def action(text,callback):
     widget=QPushButton(text);widget.clicked.connect(callback);return widget
 
+def bar(*items):
+    """Toolbar row: widgets keep their natural width; None inserts a stretch; (widget, n) gives that widget stretch n."""
+    host=QWidget();layout=QHBoxLayout(host);layout.setContentsMargins(0,0,0,0);layout.setSpacing(6)
+    for item in items:
+        if item is None:layout.addStretch(1)
+        elif isinstance(item,tuple):layout.addWidget(item[0],item[1])
+        else:layout.addWidget(item)
+    return host
+
 class WorkspaceMixin:
     def viewer_actions(self):
         menu=QMenu(self)
