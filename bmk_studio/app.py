@@ -21,6 +21,7 @@ from .hints import HintListWidget
 from .background import JobCenter
 from .prompt_highlight import PromptEdit, refresh_all as refresh_highlighting
 from .chips import flow
+from .adaptive_tabs import AdaptiveTabWidget
 from .crop_ui import CropInteraction,bounded_box,anchored_box,snap_value
 from . import data_location, __version__
 from .data_dialog import DataDirectoryDialog
@@ -276,6 +277,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.thumbnail_slider.setValue(max(40,min(512,int(self.appearance.get('thumbnail_size',128)))))
         self.crop_snap.setCurrentIndex(max(0,self.crop_snap.findData(self.appearance.get('crop_snap',1))))
         for i,name in enumerate(('image','note','tag','edit','info')):self.tabs.setTabIcon(i,icon(name))
+        self.tabs.fit()
 
     def resize_thumbnails(self,size):
         self.library.set_thumbnail_size(96 if getattr(self,'active_workspace',None)=='work' else size);self.thumbnail_label.setText(f'{size}px')
@@ -422,7 +424,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.jobs_status=QPushButton('작업 대기');ghost(self.jobs_status);self.jobs_status.setToolTip('진행 중인 작업 목록 열기');self.jobs_status.clicked.connect(lambda:JobCenter(self).exec())
         self.statusBar().addPermanentWidget(self.jobs_status)
         splitter.addWidget(center_host)
-        self.tabs=QTabWidget(); splitter.addWidget(self.tabs)
+        self.tabs=AdaptiveTabWidget(); splitter.addWidget(self.tabs)
         splitter.setSizes([240,730,510])
         original_page=QWidget(); ol=QVBoxLayout(original_page)
         self.source=caption('원본 메타데이터'); self.source.setWordWrap(True); ol.addWidget(self.source)
