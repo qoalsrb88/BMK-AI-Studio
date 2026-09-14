@@ -5,6 +5,8 @@ from PySide6.QtCore import Qt,QTimer,QDate,QStringListModel
 from PySide6.QtWidgets import (QDialog,QVBoxLayout,QLabel,QComboBox,QDateEdit,QCheckBox,QDialogButtonBox,
     QListWidget,QListWidgetItem,QTreeWidget,QTreeWidgetItem,QLineEdit,QSpinBox,QCompleter,QFileDialog,QInputDialog)
 from .workspace import line,action
+from .appearance import caption
+from .chips import flow
 from .background import ManagedJob,JobCenter
 from .collection_drop import CollectionDropList
 
@@ -22,12 +24,12 @@ class DiscoveryMixin:
         self.completion_model=QStringListModel(self);self.completer=QCompleter(self.completion_model,self);self.completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.search.setCompleter(self.completer);self.completion_timer=QTimer(self);self.completion_timer.setSingleShot(True);self.completion_timer.setInterval(300);self.completion_timer.timeout.connect(self.request_completion)
         self.search.textEdited.connect(lambda text:self.completion_timer.start())
-        layout.addWidget(line(action('날짜 / 타임라인',self.date_dialog),action('작업 목록',lambda:JobCenter(self).exec())))
-        layout.addWidget(line(action('유사 이미지',self.find_similar),action('의미 검색',self.semantic_dialog)))
-        self.collection_drop=CollectionDropList(self);self.collection_drop.hide();self.collection_drop.referencesDropped.connect(self.drop_collection)
+        # The job list is reachable from the status bar, so the tools section holds only discovery actions.
+        self.add_section(layout,'tools','탐색 도구').add(flow(action('날짜 / 타임라인',self.date_dialog),action('유사 이미지',self.find_similar),action('의미 검색',self.semantic_dialog)))
+        self.collection_drop=CollectionDropList(self);self.collection_drop.setMaximumHeight(110);self.collection_drop.referencesDropped.connect(self.drop_collection)
         self.collection_drop.itemClicked.connect(lambda item:self.collection_filter.setCurrentIndex(self.collection_filter.findData(item.text())))
-        layout.addWidget(action('컬렉션 드롭 영역',lambda:self.collection_drop.setVisible(not self.collection_drop.isVisible())))
-        layout.addWidget(self.collection_drop);self.refresh_collections()
+        drop_hint=caption('갤러리 카드를 아래 컬렉션 이름 위로 드래그하면 추가됩니다.');drop_hint.setWordWrap(True)
+        self.sections['collections'].add(drop_hint,self.collection_drop);self.refresh_collections()
 
     def request_completion(self):
         if self.closing_requested or self.library.stopped:return

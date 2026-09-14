@@ -5,6 +5,8 @@ from PySide6.QtCore import Qt,QTimer
 from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QComboBox,QLabel,QPushButton,
     QLineEdit,QCheckBox,QInputDialog,QMenu,QListView,QDialog,QListWidget,QListWidgetItem,QPlainTextEdit,QDialogButtonBox)
 from .organize import set_favorites,set_rating
+from .section import Section
+from .chips import ChipRow
 
 def line(*widgets):
     host=QWidget();layout=QHBoxLayout(host);layout.setContentsMargins(0,0,0,0)
@@ -50,10 +52,20 @@ class WorkspaceMixin:
             if not self.closing_requested and str(self.path)==second and self.compare_path==first:BrowserCompareDialog(*result,self).exec()
         self.task(read,show)
 
+    def add_section(self,layout,key,title,expanded=True):
+        """Collapsible group; its open/closed state is remembered per key in the appearance settings."""
+        section=Section(key,title,expanded);self.sections[key]=section;section.toggled.connect(self.remember_section);layout.addWidget(section);return section
+
+    def remember_section(self,key,expanded):
+        if not hasattr(self,'appearance'):return
+        state=dict(self.appearance.get('sections') or {})
+        if state.get(key)==expanded:return
+        state[key]=expanded;self.appearance['sections']=state;self.store.state('appearance',self.appearance)
+
     def build_browser_controls(self,layout):
+        self.sections={}
         self.scope=QComboBox()
         for label,key in [('전체 이미지 정보','all'),('파일명','filename'),('원본 프롬프트','positive'),('원본 네거티브','negative'),('작업 텍스트','work'),('추정 태그','tags')]:self.scope.addItem(label,key)
-        layout.addWidget(self.scope)
         self.filter_panel=QWidget();form=QVBoxLayout(self.filter_panel);form.setContentsMargins(0,0,0,0)
         self.source_filter=QLineEdit();self.source_filter.setPlaceholderText('출처에 포함된 말 (예: ComfyUI)')
         self.models_filter=QLineEdit();self.models_filter.setPlaceholderText('기록된 모델·LoRA 이름');self.models_filter.setToolTip('ComfyUI 그래프에 기록된 후보도 포함합니다. 실제 실행 분기를 확정하지 않습니다.')
@@ -70,14 +82,13 @@ class WorkspaceMixin:
         for n in range(1,6):self.rating_filter.addItem(f'★ {n} 이상',n)
         for widget in (self.source_filter,self.models_filter,self.aspect_filter,self.pixels_filter,self.days_filter,self.tagged_filter,self.favorite_filter,self.rating_filter):form.addWidget(widget)
         self.filter_panel.hide();toggle=action('상세 필터',lambda:self.filter_panel.setVisible(not self.filter_panel.isVisible()))
-        layout.addWidget(line(toggle,action('모두 해제',self.clear_browser_filters)));layout.addWidget(self.filter_panel)
+        # Active conditions show as removable chips under the search field.
+        self.filter_chips=ChipRow('전체 이미지')
+        self.add_section(layout,'search','검색').add(self.search,self.scope,self.filter_chips,line(toggle,action('모두 해제',self.clear_browser_filters)),self.filter_panel)
         self.collection_filter=QComboBox();self.refresh_collections()
-        layout.addWidget(self.collection_filter)
-        layout.addWidget(line(action('컬렉션 만들기',self.new_collection),action('관리',self.collection_menu)))
-        self.saved_search=QComboBox();self.saved_search.addItem('저장된 검색 선택',None)
-        self.refresh_saved_searches();layout.addWidget(self.saved_search)
-        layout.addWidget(line(action('검색 저장',self.save_search),action('검색 삭제',self.delete_search)))
-        self.filter_summary=QLabel('전체 이미지');self.filter_summary.setWordWrap(True);layout.addWidget(self.filter_summary)
+        self.add_section(layout,'collections','컬렉션').add(self.collection_filter,line(action('컬렉션 만들기',self.new_collection),action('관리',self.collection_menu)))
+        self.saved_search=QComboBox();self.saved_search.addItem('저장된 검색 선택',None);self.refresh_saved_searches()
+        self.add_section(layout,'saved','저장된 검색').add(self.saved_search,line(action('검색 저장',self.save_search),action('검색 삭제',self.delete_search)))
         self.scope.currentIndexChanged.connect(self.apply_browser_filters)
         self.source_filter.textChanged.connect(self.apply_browser_filters)
         self.models_filter.textChanged.connect(self.apply_browser_filters)
@@ -95,17 +106,23 @@ class WorkspaceMixin:
     def apply_browser_filters(self,*args):
         if not hasattr(self,'library'):return
         self.library.filters=self.browser_filters();self.library.set_query(self.search.text())
-        labels=[]
-        if self.search.text().strip():labels.append('검색: '+self.search.text())
-        if self.scope.currentData()!='all':labels.append(self.scope.currentText())
-        if self.source_filter.text().strip():labels.append('출처: '+self.source_filter.text().strip())
-        if self.models_filter.text().strip():labels.append('모델·LoRA 후보: '+self.models_filter.text().strip())
+        chips=[]
+        if self.search.text().strip():chips.append(('검색: '+self.search.text(),self.search.clear))
+        if self.scope.currentData()!='all':chips.append((self.scope.currentText(),lambda:self.scope.setCurrentIndex(0)))
+        if self.source_filter.text().strip():chips.append(('출처: '+self.source_filter.text().strip(),self.source_filter.clear))
+        if self.models_filter.text().strip():chips.append(('모델·LoRA 후보: '+self.models_filter.text().strip(),self.models_filter.clear))
         for widget in (self.aspect_filter,self.pixels_filter,self.days_filter,self.tagged_filter,self.rating_filter,self.collection_filter):
-            if widget.currentData():labels.append(widget.currentText())
-        if self.favorite_filter.isChecked():labels.append('즐겨찾기')
-        if self.date_filters:labels.append(('생성일' if self.date_filters.get('date_kind')=='generated' else '수정일')+' '+('미상' if self.date_filters.get('date_unknown') else self.date_filters.get('date_from','')+' ~ '+self.date_filters.get('date_to','')))
-        if self.library.transient_paths is not None:labels.append(f'발견 결과 {len(self.library.transient_paths)}개 안에서 검색 · 모두 해제로 복귀')
-        self.filter_summary.setText(' · '.join(labels) or '전체 이미지')
+            if widget.currentData():chips.append((widget.currentText(),lambda combo=widget:combo.setCurrentIndex(0)))
+        if self.favorite_filter.isChecked():chips.append(('즐겨찾기',lambda:self.favorite_filter.setChecked(False)))
+        if self.date_filters:chips.append((('생성일' if self.date_filters.get('date_kind')=='generated' else '수정일')+' '+('미상' if self.date_filters.get('date_unknown') else self.date_filters.get('date_from','')+' ~ '+self.date_filters.get('date_to','')),self.clear_date_filter))
+        if self.library.transient_paths is not None:chips.append((f'발견 결과 {len(self.library.transient_paths)}개 안에서 검색',self.clear_transient_scope))
+        self.filter_chips.set_chips(chips)
+
+    def clear_date_filter(self):
+        self.date_filters={};self.apply_browser_filters()
+
+    def clear_transient_scope(self):
+        self.library.transient_paths=None;self.apply_browser_filters()
 
     def clear_browser_filters(self):
         self.date_filters={};self.library.transient_paths=None
@@ -119,6 +136,7 @@ class WorkspaceMixin:
         self.collection_filter.setCurrentIndex(max(0,self.collection_filter.findData(selected)));self.collection_filter.blockSignals(False)
         if hasattr(self,'collection_drop'):
             self.collection_drop.clear();self.collection_drop.addItems([name for name, in self.store.db.execute('SELECT name FROM collections ORDER BY name')])
+            self.collection_drop.setVisible(self.collection_drop.count()>0)
 
     def new_collection(self):
         name,ok=QInputDialog.getText(self,'컬렉션 만들기','이름 (원본 파일 위치는 유지됩니다)')

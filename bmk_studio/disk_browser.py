@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (QWidget,QVBoxLayout,QLineEdit,QComboBox,QLabel,QL
 from .core import EXTENSIONS,load_image,inspect_image,json_text,file_stamp
 from .workspace import line,action,bar
 from .appearance import CANVAS,caption
+from .prompt_highlight import PromptEdit
 from .explorer_navigation import ExplorerView,NavigationPane
 
 
@@ -78,7 +79,7 @@ class DiskBrowser(QWidget):
         side=QWidget();right=QVBoxLayout(side);self.side_layout=right;self.label=caption('원본 미리보기','field');self.label.setWordWrap(True);right.addWidget(self.label)
         self.viewer=viewer_class();self.viewer.placeholder='이미지를 선택하면 원본을 여기에서 미리 봅니다.';self.viewer.display(None);right.addWidget(self.viewer,3);right.addWidget(line(action('화면 맞춤',self.viewer.fit),action('100%',self.viewer.actual_size)))
         self.info_tabs=QTabWidget();right.addWidget(self.info_tabs,2)
-        self.positive=QPlainTextEdit();self.negative=QPlainTextEdit();self.metadata=QPlainTextEdit()
+        self.positive=PromptEdit();self.negative=PromptEdit();self.metadata=QPlainTextEdit()
         for title,editor in [('프롬프트',self.positive),('네거티브',self.negative),('전체 정보',self.metadata)]:
             editor.setReadOnly(True);editor.setPlaceholderText('원본에 기록된 '+title+'가 없습니다.');page=QWidget();form=QVBoxLayout(page);form.addWidget(owner.prompt_header(title,editor));form.addWidget(editor);self.info_tabs.addTab(page,title)
         self.split.addWidget(side);sizes=self.state.get('split',[220,660,400])

@@ -21,6 +21,7 @@ PATHS = {
     'external': '<path d="M14 4h6v6M20 4 10 14M18 13v6H5V6h6"/>',
     'chevron-down': '<path d="m6 9 6 6 6-6"/>',
     'chevron-up': '<path d="m6 15 6-6 6 6"/>',
+    'chevron-right': '<path d="m9 6 6 6-6 6"/>',
     'close': '<path d="M6 6l12 12M18 6 6 18"/>',
     'check': '<path d="m5 12 5 5L20 7"/>',
 }
@@ -59,7 +60,8 @@ def icon(name, color=None):
 
 def decorate(button, name):
     button.setProperty('iconName', name)
-    button.setIcon(icon(name, tokens()['on_accent'] if button.property('primary') else None)); button.setIconSize(QSize(18, 18))
+    color = tokens()['on_accent'] if button.property('primary') else tokens()['muted'] if button.property('role') == 'section' else None
+    button.setIcon(icon(name, color)); button.setIconSize(QSize(18, 18) if button.property('role') != 'section' else QSize(14, 14))
 
 
 def ghost(button):
@@ -120,7 +122,14 @@ def stylesheet(t):
     QPushButton[ghost="true"]:hover {{ background:{surface2}; }}
     QPushButton[ghost="true"]:pressed {{ background:{selected}; }}
     QPushButton[ghost="true"]:checked {{ background:{selected}; border-color:{border}; }}
+    QPushButton[role="section"] {{ text-align:left; font-size:11px; font-weight:700; letter-spacing:1px; color:{muted}; background:transparent; border:1px solid transparent; padding:6px 2px; min-height:14px; }}
+    QPushButton[role="section"]:hover {{ color:{fg}; background:transparent; }}
+    QPushButton[role="section"]:checked, QPushButton[role="section"]:pressed, QPushButton[role="section"]:focus {{ background:transparent; border-color:transparent; }}
+    QPushButton[chip="true"] {{ background:{selected}; color:{fg}; border:1px solid transparent; border-radius:11px; padding:2px 9px; font-size:12px; min-height:16px; }}
+    QPushButton[chip="true"]:hover {{ border-color:{accent}; }}
+    QPushButton[chip="true"]:disabled {{ background:{surface2}; color:{muted}; }}
     QPushButton[ghost="true"]:disabled {{ background:transparent; }}
+    QPushButton::menu-indicator {{ image:url({chevron_down}); width:12px; height:12px; subcontrol-origin:padding; subcontrol-position:center right; right:6px; }}
     QCheckBox, QRadioButton {{ spacing:8px; padding:3px 0; }}
     QCheckBox::indicator, QRadioButton::indicator {{ width:16px; height:16px; border:1px solid {muted}; border-radius:4px; background:{surface}; }}
     QRadioButton::indicator {{ border-radius:8px; }}
@@ -131,7 +140,7 @@ def stylesheet(t):
     QCheckBox::indicator:checked:disabled {{ background:{border}; border-color:{border}; }}
     QTabWidget::pane {{ border:0; }}
     QTabBar {{ background:transparent; qproperty-drawBase:0; }}
-    QTabBar::tab {{ background:transparent; color:{muted}; padding:8px 10px; margin-right:2px; border-bottom:2px solid transparent; }}
+    QTabBar::tab {{ background:transparent; color:{muted}; padding:8px 8px; margin-right:1px; border-bottom:2px solid transparent; }}
     QTabBar::tab:hover {{ color:{fg}; }}
     QTabBar::tab:selected {{ color:{fg}; border-bottom:2px solid {accent}; font-weight:600; }}
     QTabBar#mainNav::tab {{ font-size:14px; padding:9px 14px; }}

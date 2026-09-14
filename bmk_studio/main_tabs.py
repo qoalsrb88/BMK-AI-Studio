@@ -12,10 +12,10 @@ class MainTabsMixin:
         self.main_tabs.setCurrentIndex(1);self.header_layout.insertWidget(1,self.main_tabs)
         self.notes_page=QSplitter();self.notes_page.addWidget(self.note_browser);self.note_editor_host=QWidget();self.note_editor_layout=QVBoxLayout(self.note_editor_host);self.note_editor_scroll=QScrollArea();self.note_editor_scroll.setWidgetResizable(True);self.note_editor_scroll.setWidget(self.note_editor_host);self.notes_page.addWidget(self.note_editor_scroll);self.notes_page.setSizes([300,1000]);self.notes_page.hide();outer.addWidget(self.notes_page,1)
         self.open_saved_note=action('저장한 노트 열기',self.open_transferred_note);self.open_saved_note.hide();outer.addWidget(self.open_saved_note)
-        self.image_view_modes=QTabBar();self.image_view_modes.setExpanding(False);self.image_view_modes.setDrawBase(False);self.image_view_modes.addTab('갤러리');self.image_view_modes.addTab('큰 미리보기');self.image_view_modes.currentChanged.connect(lambda i:self.workspace_mode.setCurrentIndex(i));self.image_work_layout.insertWidget(0,caption('이미지에 연결된 작업 프롬프트'))
+        self.image_view_modes=QTabBar();self.image_view_modes.setExpanding(False);self.image_view_modes.setDrawBase(False);self.image_view_modes.setUsesScrollButtons(False);self.image_view_modes.addTab('갤러리');self.image_view_modes.addTab('큰 미리보기');self.image_view_modes.currentChanged.connect(lambda i:self.workspace_mode.setCurrentIndex(i));self.image_work_layout.insertWidget(0,caption('이미지에 연결된 작업 프롬프트'))
         self.gallery_toolbar.layout().insertWidget(0,self.image_view_modes)
         # The transfer action sits last in the editor, mirroring '노트에 저장…' in image mode.
-        self.note_send_button=action('현재 이미지의 작업 프롬프트로 보내기…',self.note_to_image);self.prompt_editor.layout().addWidget(self.note_send_button);self.note_only_controls.append(self.note_send_button)
+        self.note_send_button=action('현재 이미지의 작업 프롬프트로 보내기…',self.note_to_image);self.note_actions.layout().insertWidget(1,self.note_send_button);self.note_only_controls.append(self.note_send_button)
         self.main_tabs.currentChanged.connect(self.change_main_tab);self.workspace_mode.hide();self.apply_main_visibility()
     def hold_editor(self):
         key=('note',self.note_id or self.document_index) if self.note_mode else ('image',str(self.path))

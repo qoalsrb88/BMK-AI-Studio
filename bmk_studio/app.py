@@ -19,6 +19,8 @@ from .discovery_ui import DiscoveryMixin
 from .appearance import apply_theme, decorate, icon, ghost, caption, CANVAS, CANVAS_TEXT
 from .hints import HintListWidget
 from .background import JobCenter
+from .prompt_highlight import PromptEdit, refresh_all as refresh_highlighting
+from .chips import flow
 from .crop_ui import CropInteraction,bounded_box,anchored_box,snap_value
 from . import data_location, __version__
 from .data_dialog import DataDirectoryDialog
@@ -262,7 +264,8 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
 
     def apply_appearance(self):
         apply_theme(QApplication.instance(),self.appearance.get('theme','light'))
-        self.viewer.setBackgroundBrush(QColor(CANVAS))
+        self.viewer.setBackgroundBrush(QColor(CANVAS));refresh_highlighting()
+        for key,section in getattr(self,'sections',{}).items():section.set_expanded((self.appearance.get('sections') or {}).get(key,section.default))
         self.viewer.set_interpolation(self.appearance.get('interpolation','smooth'))
         try:self.viewer.overscroll=max(0,min(50,int(self.appearance.get('overscroll',25))))
         except (ValueError,TypeError):self.viewer.overscroll=25
@@ -362,23 +365,23 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         splitter = QSplitter();self.main_splitter=splitter
         outer.addWidget(splitter,1)
         left = QWidget(); ll = QVBoxLayout(left); ll.setContentsMargins(0,8,8,0)
-        ll.addWidget(caption('라이브러리','section'))
         self.search = QLineEdit(); self.search.setPlaceholderText('파일명·메타·작업·추정 태그 검색')
-        self.search.textChanged.connect(self.search_changed); ll.addWidget(self.search)
+        self.search.textChanged.connect(self.search_changed)
         self.build_browser_controls(ll)
         self.library = LibraryView(self.store.root/'library.sqlite3',self); self.library.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.library.setIconSize(QSize(64,64));self.library.setUniformItemSizes(True)
         self.library.itemClicked.connect(lambda item:self.safe(lambda:self.load(item.data(Qt.ItemDataRole.UserRole))))
         self.library.removeRequested.connect(lambda path:self.remove_library_paths([path]))
         self.library.doubleClicked.connect(lambda index:self.workspace_mode.setCurrentIndex(1))
-        self.thumbnail_label=caption('64px');self.thumbnail_slider=QSlider(Qt.Orientation.Horizontal);self.thumbnail_slider.setFixedWidth(110)
+        self.thumbnail_label=caption('64px');self.thumbnail_slider=QSlider(Qt.Orientation.Horizontal);self.thumbnail_slider.setFixedWidth(90)
         self.thumbnail_slider.setRange(40,512);self.thumbnail_slider.setValue(64);self.thumbnail_slider.setAccessibleName('갤러리 썸네일 크기');self.thumbnail_slider.setToolTip('갤러리 썸네일 크기')
         self.thumbnail_slider.valueChanged.connect(self.resize_thumbnails)
-        ll.addWidget(button('선택 항목을 목록에서 제거',self.remove_library_selection))
-        self.restore_removed_button=button('목록 제거 되돌리기',self.undo_library_removal);self.restore_removed_button.setEnabled(False);decorate(self.restore_removed_button,'undo');ll.addWidget(self.restore_removed_button)
+        manage=self.add_section(ll,'manage','목록 관리')
+        manage.add(button('선택 항목을 목록에서 제거',self.remove_library_selection))
+        self.restore_removed_button=button('목록 제거 되돌리기',self.undo_library_removal);self.restore_removed_button.setEnabled(False);decorate(self.restore_removed_button,'undo');manage.add(self.restore_removed_button)
         self.watch_toggle=QCheckBox('열어 둔 폴더의 새 이미지 자동 수집')
-        self.watch_toggle.toggled.connect(self.toggle_watch);ll.addWidget(self.watch_toggle)
-        self.library_status=caption('폴더를 열면 감시를 켤 수 있습니다.');self.library_status.setWordWrap(True);ll.addWidget(self.library_status);ll.addStretch(1)
+        self.watch_toggle.toggled.connect(self.toggle_watch);manage.add(self.watch_toggle)
+        self.library_status=caption('폴더를 열면 감시를 켤 수 있습니다.');self.library_status.setWordWrap(True);manage.add(self.library_status);ll.addStretch(1)
         self.library.searching.connect(lambda active:self.library_status.setText('디스크 검색 중…' if active else f'{self.library.proxy.rowCount()} / {self.library.count()}개 이미지'))
         self.note_browser=QWidget();nl=QVBoxLayout(self.note_browser);nl.setContentsMargins(0,0,8,0)
         nl.addWidget(caption('프롬프트 노트','section'))
@@ -419,8 +422,8 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         splitter.setSizes([240,730,510])
         original_page=QWidget(); ol=QVBoxLayout(original_page)
         self.source=caption('원본 메타데이터'); self.source.setWordWrap(True); ol.addWidget(self.source)
-        self.positive=QPlainTextEdit(); self.positive.setReadOnly(True); self.positive.setPlaceholderText('파일에 저장된 프롬프트')
-        self.negative=QPlainTextEdit(); self.negative.setReadOnly(True); self.negative.setPlaceholderText('파일에 저장된 네거티브')
+        self.positive=PromptEdit(); self.positive.setReadOnly(True); self.positive.setPlaceholderText('파일에 저장된 프롬프트')
+        self.negative=PromptEdit(); self.negative.setReadOnly(True); self.negative.setPlaceholderText('파일에 저장된 네거티브')
         ol.addWidget(self.prompt_header('프롬프트',self.positive));ol.addWidget(self.positive,3)
         ol.addWidget(self.prompt_header('네거티브',self.negative));ol.addWidget(self.negative,2)
         ol.addWidget(row(button('프롬프트 복사',lambda:self.copy_text(self.positive.toPlainText())),button('작업으로 가져오기',self.use_original,True)))
@@ -433,18 +436,22 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         wl.addWidget(self.note_tabs)
         self.note_title=QLineEdit(); self.note_title.setPlaceholderText('프로젝트 / 캐릭터 / 노트 이름'); wl.addWidget(self.note_title)
         self.note_category=QComboBox();self.note_category.setEditable(True);self.note_category.setPlaceholderText('카테고리 (예: 캐릭터/의상)');wl.addWidget(self.note_category)
-        self.draft=QPlainTextEdit(); self.draft.setPlaceholderText('다음 생성에 사용할 프롬프트');self.work_prompt_header=self.prompt_header('작업 프롬프트',self.draft);wl.addWidget(self.work_prompt_header); wl.addWidget(self.draft,4)
-        self.draft_negative=QPlainTextEdit(); self.draft_negative.setPlaceholderText('작업 네거티브');self.work_negative_header=self.prompt_header('작업 네거티브',self.draft_negative);wl.addWidget(self.work_negative_header); wl.addWidget(self.draft_negative,2)
-        self.memo=QPlainTextEdit(); self.memo.setPlaceholderText('설정·서비스·작업 메모'); wl.addWidget(self.memo,2)
-        self.conversion=QComboBox(); self.conversion.addItems(BMKPromptSyntaxConverter.MODES)
-        wl.addWidget(row(self.conversion,button('문법 변환',self.convert)))
-        wl.addWidget(button('와일드카드 편집 / 확장',self.expand_work_wildcards))
-        wl.addWidget(button('프롬프트 조각 보관함',self.prompt_snippets))
-        self.note_save_button=button('노트 저장',self.save_note,True);wl.addWidget(row(button('중복 태그 정리',self.dedupe),button('복사',lambda:self.copy_text(self.draft.toPlainText())),self.note_save_button))
-        self.note_revision_row=row(button('버전 이력 / 복원',self.note_history),button('보관 / 복구',self.archive_current_note),button('JSON 내보내기',self.export_note));wl.addWidget(self.note_revision_row)
-        self.note_fields_row=row(button('BMK 추가 필드',self.edit_note_fields),button('전체 JSON 편집',self.edit_note_json));wl.addWidget(self.note_fields_row)
-        self.note_only_controls=[self.note_tabs,self.note_title,self.note_category,self.note_save_button,self.note_revision_row,self.note_fields_row]
-        self.image_note_save=button('노트에 저장…',self.save_image_to_note);wl.addWidget(self.image_note_save)
+        self.draft=PromptEdit(); self.draft.setPlaceholderText('다음 생성에 사용할 프롬프트');self.work_prompt_header=self.prompt_header('작업 프롬프트',self.draft);wl.addWidget(self.work_prompt_header); wl.addWidget(self.draft,4)
+        self.draft_negative=PromptEdit(); self.draft_negative.setPlaceholderText('작업 네거티브');self.work_negative_header=self.prompt_header('작업 네거티브',self.draft_negative);wl.addWidget(self.work_negative_header); wl.addWidget(self.draft_negative,2)
+        self.memo=QPlainTextEdit(); self.memo.setPlaceholderText('설정·서비스·작업 메모'); wl.addWidget(caption('메모','field')); wl.addWidget(self.memo,2)
+        self.conversion=QComboBox(); self.conversion.addItems(BMKPromptSyntaxConverter.MODES);self.conversion.setMinimumContentsLength(10);self.conversion.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        # Prompt tools act on the text above; document actions sit below with the primary save on the right.
+        wildcards=button('와일드카드',self.expand_work_wildcards);wildcards.setToolTip('와일드카드 편집 / 확장')
+        snippets=button('조각 보관함',self.prompt_snippets);snippets.setToolTip('프롬프트 조각 보관함 · 기존 노트에서 가져오기')
+        dedupe=button('중복 정리',self.dedupe);dedupe.setToolTip('중복 태그 정리 · 가중치 문법이 없는 평문 태그에만 적용')
+        wl.addWidget(flow(self.conversion,button('문법 변환',self.convert),wildcards,snippets,dedupe))
+        self.note_save_button=button('노트 저장',self.save_note,True)
+        self.note_history_button=button('버전 이력',self.note_history);self.note_history_button.setToolTip('버전 이력 / 복원')
+        self.note_archive_button=button('보관 / 복구',self.archive_current_note)
+        self.note_more=QPushButton('더 보기');more=QMenu(self.note_more);more.addAction('JSON 내보내기',self.export_note);more.addAction('BMK 추가 필드',self.edit_note_fields);more.addAction('전체 JSON 편집',self.edit_note_json);self.note_more.setMenu(more)
+        self.image_note_save=button('노트에 저장…',self.save_image_to_note)
+        self.note_actions=bar(self.image_note_save,None,self.note_history_button,self.note_archive_button,self.note_more,self.note_save_button);wl.addWidget(self.note_actions)
+        self.note_only_controls=[self.note_tabs,self.note_title,self.note_category,self.note_save_button,self.note_history_button,self.note_archive_button,self.note_more]
         ol.addWidget(button('노트에 저장…',self.save_image_to_note))
         self.tabs.addTab(work,'작업 프롬프트')
         tags=QWidget(); tl=QVBoxLayout(tags)
@@ -454,24 +461,26 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
             try:default_model=json.loads(local.read_text(encoding='utf-8')).get('model_path','')
             except (ValueError,OSError):pass
         self.model_path=QLineEdit(str(self.settings.value('model_path',default_model))); self.model_path.setPlaceholderText('WD v3 모델 폴더')
-        tl.addWidget(row(self.model_path,button('찾기',self.choose_model),button('다운로드',self.download_model)))
-        tl.addWidget(QLabel('추정 태그는 원본 프롬프트와 별도로 보관됩니다.'))
         self.precision=QComboBox();self.precision.addItem('FP32 · 기본 / CPU·CUDA','fp32');self.precision.addItem('FP16 · CUDA 혼합 정밀도','fp16');self.precision.addItem('BF16 · 지원 CUDA GPU','bf16')
-        self.precision.currentIndexChanged.connect(self.refresh_saved_tags);tl.addWidget(self.precision)
+        self.precision.currentIndexChanged.connect(self.refresh_saved_tags)
+        self.batch_size=QSpinBox();self.batch_size.setRange(1,16);self.batch_size.setValue(4)
+        # Rarely changed model settings fold away once a model path is set.
+        model=self.add_section(tl,'tag_model','모델 설정',expanded=not self.model_path.text().strip())
+        model.add(row(self.model_path,button('찾기',self.choose_model),button('다운로드',self.download_model)),self.precision,
+                  bar(QLabel('추론 배치 크기'),self.batch_size,None,button('태깅 모델 메모리 해제',self.unload_tagger)),caption('추정 태그는 원본 프롬프트와 별도로 보관됩니다.'))
         self.threshold=QDoubleSpinBox(); self.threshold.setRange(0,1);self.threshold.setSingleStep(.05);self.threshold.setValue(.35)
         self.char_threshold=QDoubleSpinBox();self.char_threshold.setRange(0,1);self.char_threshold.setValue(.75)
         self.threshold.valueChanged.connect(self.render_tags);self.char_threshold.valueChanged.connect(self.render_tags)
         tl.addWidget(row(QLabel('일반'),self.threshold,QLabel('캐릭터'),self.char_threshold))
         self.exclude=QLineEdit();self.exclude.setPlaceholderText('제외 태그 (콤마 구분)');self.exclude.textChanged.connect(self.render_tags);tl.addWidget(self.exclude)
         self.tag_button=button('현재 원본 태깅',self.run_tags,True)
-        self.batch_button=button('선택 이미지 일괄 태깅',self.run_selected_tags,True)
+        self.batch_button=button('선택 이미지 일괄 태깅',self.run_selected_tags)
         tl.addWidget(row(self.tag_button,self.batch_button))
         tl.addWidget(row(button('선택을 대기열에 추가',self.enqueue_selected),button('대기열 관리',self.open_queue)))
-        self.batch_size=QSpinBox();self.batch_size.setRange(1,16);self.batch_size.setValue(4)
         self.cancel_button=button('작업 취소',self.cancel_tags);self.cancel_button.setEnabled(False)
-        tl.addWidget(row(QLabel('추론 배치 크기'),self.batch_size,self.cancel_button))
-        self.tag_progress=QProgressBar();self.tag_progress.setRange(0,1);self.tag_progress.setValue(0);tl.addWidget(self.tag_progress)
-        tl.addWidget(button('태깅 모델 메모리 해제',self.unload_tagger))
+        self.tag_progress=QProgressBar();self.tag_progress.setRange(0,1);self.tag_progress.setValue(0)
+        # Progress and cancel appear only while tagging runs.
+        self.tag_progress_row=bar((self.tag_progress,1),self.cancel_button);self.tag_progress_row.hide();tl.addWidget(self.tag_progress_row)
         self.tag_list=HintListWidget('아직 추정 태그가 없습니다.\n모델 폴더를 지정하고 현재 원본 태깅을 누르면 결과가 여기에 표시됩니다.');self.tag_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection);tl.addWidget(self.tag_list,1)
         tl.addWidget(row(button('표시 태그 복사',lambda:self.copy_text(self.tag_text())),button('선택 태그 추가',self.append_tags)))
         self.tag_status=QLabel('WD v3 · GPU 자동 선택 · 임계값 변경 시 재추론 없음');self.tag_status.setWordWrap(True);tl.addWidget(self.tag_status)
@@ -530,6 +539,8 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.edit_tool.currentIndexChanged.connect(change_tool)
         self.crop_toggle.toggled.connect(lambda on:self.workspace_mode.setCurrentIndex(1) if on else None)
         scroll=QScrollArea();scroll.setWidgetResizable(True);scroll.setWidget(edit);self.tabs.addTab(scroll,'편집')
+        # Leaving the edit tab ends crop editing so the handles do not linger over other tabs.
+        self.tabs.currentChanged.connect(lambda index:self.crop_toggle.setChecked(False) if self.tabs.widget(index) is not scroll and self.crop_toggle.isChecked() else None)
         metadata_panel=QWidget();ml=QVBoxLayout(metadata_panel)
         self.generation_settings=QPlainTextEdit();self.generation_settings.setReadOnly(True);self.generation_settings.setMaximumHeight(190)
         ml.addWidget(QLabel('파일에 기록된 생성 설정'));ml.addWidget(self.generation_settings)
@@ -742,7 +753,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         path=QFileDialog.getExistingDirectory(self,'이미지 폴더')
         if path:self.open_folder_path(path)
     def search_changed(self,text):
-        if hasattr(self,'filter_summary'):self.apply_browser_filters()
+        if hasattr(self,'filter_chips'):self.apply_browser_filters()
     def update_library_search(self,path):
         if self.library.database:
             self.library.refresh_query();return
@@ -1032,7 +1043,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         if self.queue_running and not queued:self.statusBar().showMessage('대기열을 일시 정지한 뒤 직접 태깅하세요.');return
         model=self.model_path.text().strip()
         if not model:self.error('WD v3 모델 폴더를 선택하세요.');return
-        self.tag_busy=True;self.tag_button.setEnabled(False);self.batch_button.setEnabled(False);self.cancel_button.setEnabled(True)
+        self.tag_busy=True;self.tag_button.setEnabled(False);self.batch_button.setEnabled(False);self.cancel_button.setEnabled(True);self.tag_progress_row.show()
         self.tagger.precision=self.precision.currentData();self.precision.setEnabled(False)
         self.model_path.setEnabled(False);self.batch_size.setEnabled(False)
         self.tag_progress.setRange(0,len(paths));self.tag_progress.setValue(0);self.job_log.clear()
@@ -1088,7 +1099,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         path,_=QFileDialog.getSaveFileName(self,'추정 태그 내보내기',str(target),'JSON (*.json)')
         if path:self.safe(lambda:Path(path).write_text(json_text({'kind':'inferred_tags','source':str(self.path),'model':self.scores['model'],'threshold':self.threshold.value(),'character_threshold':self.char_threshold.value(),'selected_text':self.tag_text(),'prediction':self.scores}),encoding='utf-8'))
     def tag_finished(self):
-        self.tag_busy=False;self.tag_button.setEnabled(True);self.batch_button.setEnabled(True);self.cancel_button.setEnabled(False)
+        self.tag_busy=False;self.tag_button.setEnabled(True);self.batch_button.setEnabled(True);self.cancel_button.setEnabled(False);self.tag_progress_row.hide()
         self.precision.setEnabled(True)
         self.model_path.setEnabled(True);self.batch_size.setEnabled(True)
     def unload_tagger(self):
