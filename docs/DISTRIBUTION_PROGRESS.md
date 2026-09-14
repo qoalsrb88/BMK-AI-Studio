@@ -52,3 +52,17 @@ python scripts/validate_installer.py SETUP.exe BUNDLE NEW-EVIDENCE-DIRECTORY
 - [깨끗한 Windows VM의 CPU 빌드·frozen 진단·패키지 검사](https://github.com/qoalsrb88/BMK-AI-Studio/actions/runs/34451546270) 성공. 다른 물리 PC·GPU 드라이버 조합의 실사용 검증은 별도입니다.
 - 로컬 증거: validation-distribution/FINAL_VALIDATION.json. 최종 설치 폴더는 release-installer-0.9.9-cpu-verified 및 release-installer-0.9.9-nvidia-verified입니다. CPU ZIP은 release-0.9.9-cpu-verified에 있습니다.
 - 소스는 비공개 GitHub에 반영했습니다. 설치 파일/CPU ZIP은 아직 Release에 게시하지 않았습니다. 기존 Standalone 바로가기와 0.9.8은 유지합니다.
+
+
+## 브라우저 로그인·서명 준비 작업 — 2026-09-10
+
+사용자는 개인 명의 코드 서명과 GitHub App 브라우저 로그인을 선택했습니다. 공개 Client ID는 소스에 설정했으며 비밀키를 내장하지 않습니다. 현재 작업은 기존 0.9.9 로컬 패키지에 포함되지 않은 소스 변경입니다.
+
+- Qt 비동기 Device Flow와 로그인 후 인증된 Release 조회를 추가했습니다. 서버 대기 간격·slow_down·취소·응답 제한을 처리합니다.
+- 선택적인 로그인 보관은 Windows DPAPI를 사용하며 이동 가능한 사용자 데이터 폴더와 분리합니다. 만료 또는 거부된 로그인은 다시 승인받습니다.
+- 단위 테스트 120개와 Qt 25개 검사를 통과했습니다. 로그인 검사는 로컬 HTTP 서버와 합성 인증을 사용하며 실제 Windows 암호화 저장·다이얼로그 재열기 후 취소된 인증이 복구되지 않는 동작을 확인합니다. 실제 GitHub App의 비공개 조회는 사용자 권한 설정과 승인 대기 중입니다.
+- 코드 서명 준비 코드: scripts/sign_release.py와 설치 빌더의 --signing-config 옵션입니다. 원본 번들을 보존한 복사본에 서명하고 서명·게시자·타임스탬프 확인 후 해시를 다시 계산합니다. Windows 인증서 저장소의 인증서를 선택하며 인증서 비밀키를 소스나 설정 JSON에 넣지 않습니다. 실제 인증서가 준비되지 않아 실제 서명 빌드와 서명된 설치·제거는 아직 검증하지 않았습니다.
+- 다운로드 검증 기초 코드는 새 파일의 크기·SHA256·취소·기존 파일 보존 및 실행 전 게시자 서명 확인을 제공합니다. 실제 다운로드 화면과 네트워크 연결, 자동 설치·교체·복구는 아직 구현하지 않았습니다.
+- GitHub의 No permissions / No repositories 화면에서 진행하는 순서는 [권한 설정 안내](UPDATE_LOGIN_SETUP.md)에 기록했습니다.
+
+기존 실행 파일·바로가기·사용자 데이터와 원본은 이 작업으로 변경하지 않습니다. 실제 서명, 새 패키지 제작과 배포는 후속 검증이 필요합니다.
