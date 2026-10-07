@@ -75,6 +75,15 @@ python scripts/validate_installer.py SETUP.exe BUNDLE NEW-EVIDENCE-DIRECTORY
 - WD EVA02 Large v3, FP32, 1024×1536: 최초 약 17초, 이후 같은 해상도의 다른 이미지 약 4~5초. 사용자 실측이며 통제된 벤치마크는 아닙니다. CPU 배포본 결과이므로 노트북 CUDA 성능으로 간주하지 않습니다. 최초 시간의 로딩 포함 여부는 별도 계측하지 않았습니다.
 - 0.9.10 CPU/NVIDIA판은 새 출력 폴더에 제작합니다. 이전 배포본·바로가기·사용자 데이터는 보존하며 새 패키지의 검증 결과는 별도 기록합니다.
 
+### 0.9.10 최종 설치 후보 검증 완료
+
+- 소스 커밋: 118c5ff63a57f26e2b28e9c89371c7d0ed63990f. 단위 120개 / Qt 26개 통과. CPU 배포 진단에서 CUDA 검사를 무조건 실행하던 진단 코드도 수정했습니다.
+- CPU 설치 파일 223,358,173 bytes, NVIDIA 설치 파일 2,031,630,516 bytes. 두 파일 모두 서명 없는 로컬 후보이며 이번 작업에서 GitHub에 게시하지 않았습니다.
+- 최종 파일은 release-installer-0.9.10-cpu-verified 및 release-installer-0.9.10-nvidia-verified에 있습니다. ZIP은 release-0.9.10-cpu-verified 및 release-0.9.10-nvidia-verified에 있습니다. 앞서 만든 verified 없는 폴더는 최초 진단 코드 수정 전 산출물이므로 최종 후보로 사용하지 않습니다.
+- 각 설치 후 CPU 4,976개 / NVIDIA 5,023개 파일 해시 일치, 격리 실행, 비어 있지 않은 폴더 설치 거부, 제거 후 사용자 추가 파일 보존을 통과했습니다.
+- 실제 실행 파일의 WD EVA02 Large v3 진단: CPU판은 cpu, NVIDIA판은 개발 PC RTX 4090의 cuda에서 각각 10,861개 점수를 반환했습니다. 두 배포본에서 Schannel TLS 초기화도 확인했습니다. 노트북 NVIDIA/CUDA 검증은 아직 남아 있습니다.
+- 증거와 해시: validation-0.9.10/FINAL_VALIDATION.json 및 SHA256SUMS.txt. 모델 가중치·사용자 이미지·노트는 배포본에 포함되지 않습니다.
+
 ## 0.9.11 자동 업데이트 소스 — 2026-10-07
 
 - 비공개 GitHub Release 자산의 CPU/NVIDIA 설치 파일 선택, 비동기 다운로드, 진행률·취소, SHA256/크기 검증을 연결했습니다. 접근 토큰은 최초 GitHub API 요청에만 쓰며 허용된 HTTPS 배포 호스트로 리디렉션할 때 전달하지 않습니다.
