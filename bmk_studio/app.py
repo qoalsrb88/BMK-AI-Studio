@@ -439,6 +439,8 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.note_tabs.addTab('이미지 작업');self.note_tabs.setTabData(0,{'id':None})
         self.note_tabs.setTabButton(0,QTabBar.ButtonPosition.RightSide,None)
         self.note_tabs.currentChanged.connect(self.activate_document);self.note_tabs.tabCloseRequested.connect(self.close_document)
+        self.note_tabs.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.note_tabs.customContextMenuRequested.connect(self.note_tab_context_menu)
         wl.addWidget(self.note_tabs)
         self.note_title=QLineEdit(); self.note_title.setPlaceholderText('프로젝트 / 캐릭터 / 노트 이름'); wl.addWidget(self.note_title)
         self.note_category=QComboBox();self.note_category.setEditable(True);self.note_category.setPlaceholderText('카테고리 (예: 캐릭터/의상)');wl.addWidget(self.note_category)
@@ -875,6 +877,21 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.draft.setPlainText(saved[0] if saved else (self.info['positive'] if self.info else ''))
         self.draft_negative.setPlainText(saved[1] if saved else (self.info['negative'] if self.info else ''));self.memo.setPlainText(saved[2] if saved else '')
         self.loading=False;self.select_document(0)
+    def note_tab_context_menu(self,pos):
+        index=self.note_tabs.tabAt(pos)
+        if index<=0:return
+        menu=QMenu(self.note_tabs);targets={}
+        for label,indices in (
+            ('이 탭 닫기',[index]),
+            ('오른쪽 탭 모두 닫기',list(range(index+1,self.note_tabs.count()))),
+            ('왼쪽 탭 모두 닫기',list(range(1,index))),
+            ('나머지 탭 모두 닫기',[i for i in range(1,self.note_tabs.count()) if i!=index]),
+        ):
+            action=menu.addAction(label);action.setEnabled(bool(indices));targets[action]=indices
+        chosen=menu.exec(self.note_tabs.mapToGlobal(pos))
+        # Remove from right to left so each remaining tab keeps its original index.
+        for target in reversed(targets.get(chosen,[])):self.close_document(target)
+        menu.deleteLater()
     def close_document(self,index):
         if index==0:return
         self.save_draft()
