@@ -13,7 +13,7 @@ def version_tuple(value):
     return tuple(map(int, value.removeprefix('v').split('.')))
 
 
-def available_release(payload, current, include_beta=True):
+def available_release(payload, current, include_beta=True, flavor=None):
     if len(payload) > MAX_RESPONSE:
         raise ValueError('Release response too large')
     releases = json.loads(payload)
@@ -34,8 +34,9 @@ def available_release(payload, current, include_beta=True):
         except ValueError:
             continue
         if version > current_version:
-            candidates.append((version, {'version': tag.removeprefix('v'),
-                                        'beta': release['prerelease'],
-                                        'url': RELEASES_URL + '/tag/' + tag}))
+            result={'version':tag.removeprefix('v'),'beta':release['prerelease'],'url':RELEASES_URL+'/tag/'+tag}
+            if flavor is not None:
+                from .update_assets import installer_asset
+                result['installer']=installer_asset(release,result['version'],flavor)
+            candidates.append((version,result))
     return max(candidates, key=lambda item: item[0])[1] if candidates else None
-

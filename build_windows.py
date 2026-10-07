@@ -7,6 +7,7 @@ ROOT=Path(__file__).resolve().parent
 
 def main():
     from bmk_studio import __version__
+    from bmk_studio.update_install import UPDATE_PROTOCOL
     destination=(ROOT/os.environ.get('BMK_BUILD_FOLDER','package')).resolve()
     destination.relative_to(ROOT)
     bundle=destination/'BMK-AI-Studio'
@@ -61,7 +62,7 @@ def main():
     from PySide6.QtCore import qVersion
     info={'version':__version__,'source_commit':revision,'source_dirty':dirty,'python':sys.version.split()[0],
           'qt':qVersion(),'torch':torch.__version__,'cuda':torch.version.cuda,'signed':False,
-          'model_weights_included':False,'repository':'https://github.com/qoalsrb88/BMK-AI-Studio'}
+          'model_weights_included':False,'repository':'https://github.com/qoalsrb88/BMK-AI-Studio','update_protocol':UPDATE_PROTOCOL}
     (bundle/'build-info.json').write_text(json.dumps(info,indent=2),encoding='utf-8')
     print(bundle/'BMK-AI-Studio.exe',flush=True)
 

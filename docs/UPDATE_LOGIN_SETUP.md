@@ -30,6 +30,6 @@ Contents 읽기 권한은 배포 정보와 저장소 콘텐츠를 읽을 수 있
 - 여전히 No repositories만 보임: 앱 등록의 Contents 설정 저장과 기존 설치의 새 권한 승인을 모두 확인하고 페이지를 새로고침합니다.
 - 로그인은 성공했으나 비공개 버전 조회가 안 됨: 로그인한 계정 자체의 저장소 접근 권한, 앱의 Contents 읽기 권한, 앱 설치의 저장소 선택을 함께 확인합니다.
 - 인증이 만료되거나 취소됨: 앱에서 다시 로그인합니다. 앱은 거부된 보관 인증을 정리합니다.
-- 설치 파일 서명 및 자동 설치: 이 로그인 설정과 별도 작업입니다. 코드 서명 인증서가 준비되지 않았고 자동 다운로드/설치 화면과 교체·복구 절차는 아직 미완료입니다.
+- 설치 파일 서명 및 자동 설치: 이 로그인 설정과 별도 작업입니다. 0.9.11 소스에 다운로드/설치 화면과 백업·복구 절차를 구현했지만 실제 인증서가 없어 자동 설치는 비활성 상태입니다. 인증서 준비 순서는 [배포 안내](RELEASING.md#개인-명의-코드-서명-준비)를 참고하세요.
 
 참고: [앱 등록 변경](https://docs.github.com/en/apps/maintaining-github-apps/modifying-a-github-app-registration), [설치된 앱의 저장소 선택](https://docs.github.com/en/apps/using-github-apps/reviewing-and-modifying-installed-github-apps), [Release 조회에 필요한 Contents 권한](https://docs.github.com/en/rest/releases/releases#list-releases).

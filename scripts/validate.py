@@ -2,7 +2,7 @@
 import os,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-SMOKES=('update_tls','update_login','updates','ui','ux','browser','discovery','disk_browser','explorer_reflow','main_tabs','crop','data_location','documents','edit_safety','editors','sessions','stitch','library','paged_library','recovery','relink','queue','productivity','model_download','color','cancel')
+SMOKES=('update_tls','update_login','updates','update_delivery','ui','ux','browser','discovery','disk_browser','explorer_reflow','main_tabs','crop','data_location','documents','edit_safety','editors','sessions','stitch','library','paged_library','recovery','relink','queue','productivity','model_download','color','cancel')
 def main():
     env=os.environ.copy();env['QT_QPA_PLATFORM']='offscreen'
     commands=[('unit',[sys.executable,'-m','unittest','discover','-s','tests'])]+[(name,[sys.executable,f'tests/smoke_{name}.py']) for name in SMOKES]

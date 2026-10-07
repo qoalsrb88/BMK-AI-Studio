@@ -7,6 +7,9 @@ from pathlib import Path
 
 if __name__=='__main__':
     multiprocessing.freeze_support()
+    if len(sys.argv)==3 and sys.argv[1]=='--apply-update':
+        from bmk_studio.update_install import main as apply_update
+        sys.exit(apply_update(sys.argv[2]))
     if '--self-test' in sys.argv:
         os.environ['QT_QPA_PLATFORM']='offscreen'
         from bmk_studio.diagnostics import run
