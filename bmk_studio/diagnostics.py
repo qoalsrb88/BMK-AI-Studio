@@ -29,7 +29,11 @@ def run(args):
         Image.new('RGB',(320,240),'#316c80').save(source,pnginfo=meta);before=fingerprint(source)
         w.add_paths([source]);wait();assert w.positive.toPlainText()=='bird, blue sky'
         from .advanced_diagnostics import run as advanced
-        result['advanced_checks']=advanced(root,w,'--model' in args);wait()
+        gpu_checks=False
+        if '--model' in args:
+            import torch
+            gpu_checks=torch.cuda.is_available()
+        result['advanced_checks']=advanced(root,w,gpu_checks);wait()
         from .discovery_diagnostics import run as discovery
         result['discovery_checks']=discovery(root,w,args[args.index('--semantic-model')+1] if '--semantic-model' in args else None);wait()
         assert w.library.count()==1 and not w.library_items[str(source)].icon().isNull()
