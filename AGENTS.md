@@ -1,6 +1,7 @@
 # BMK AI Studio development
 
 - For a new maintenance or improvement session, read docs/HANDOFF.md, verify the current Git state, and follow the user's requested scope for that session.
+- At the end of each maintenance task, recommend commit, push, and EXE release timing separately, with a brief reason, following the cadence in docs/HANDOFF.md. These recommendations do not authorize execution; honor any explicit authorization already given by the user without asking again.
 - This is a standalone Windows app. Never import ComfyUI server, folder_paths or node loader in application code.
 - Vendor snapshots are isolated; their optional imports must remain optional.
 - Keep original metadata, inferred tags, and work prompts separate. Never fabricate a missing source prompt.
