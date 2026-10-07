@@ -7,7 +7,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from PySide6.QtCore import QTimer
 from PySide6.QtNetwork import QTcpServer,QHostAddress
 from PySide6.QtWidgets import QApplication
-from bmk_studio import update_login,update_dialog
+from bmk_studio import update_login,legacy_update_dialog as update_dialog
 from bmk_studio.update_credentials import LoginStore
 app=QApplication([])
 root=Path(tempfile.mkdtemp(prefix='bmk-login-test-')).resolve()

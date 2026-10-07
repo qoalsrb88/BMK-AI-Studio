@@ -37,7 +37,7 @@ def probe(mode):
         url=f'https://127.0.0.1:{server.serverPort()}/'
         if mode=='update':
             update_dialog.API_URL=url
-            dialog=update_dialog.UpdateDialog(client_id='',login_store=LoginStore(Path(root)/'login.bin'))
+            dialog=update_dialog.UpdateDialog()
             button=dialog.check
             pending=lambda:dialog.reply is not None
         else:

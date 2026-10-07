@@ -302,10 +302,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
             change_data.setEnabled(False);layout.addRow(QLabel('실행 옵션 또는 BMK_STUDIO_DATA로 경로를 지정했습니다.\n설정에서 변경하려면 해당 경로 지정을 해제하고 실행하세요.'))
         def updates():
             from .update_dialog import UpdateDialog
-            update=UpdateDialog(dialog)
-            if update.exec()==QDialog.DialogCode.Accepted and update.install_request:
-                request=update.install_request;dialog.reject()
-                QTimer.singleShot(0,lambda:self.install_update(request))
+            UpdateDialog(dialog).exec()
         layout.addRow(button('업데이트 확인 / 배포 페이지…',updates))
         naming=QLineEdit(self.appearance.get('export_pattern','{source}_edited'));layout.addRow('내보내기 이름 규칙',naming)
         name_preview=QLabel();name_preview.setWordWrap(True);layout.addRow('이름 미리보기',name_preview)
@@ -1415,20 +1412,6 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
             self.library.remove_paths([old]);self.library_items.pop(old,None);self.searchable.pop(old,None);self.index_stamps.pop(old,None)
             self.add_paths([result],False);item.setData(Qt.ItemDataRole.UserRole,result);item.setText('재연결 완료 · '+result)
             self.statusBar().showMessage('재연결 완료 · 이전 기록은 유지했습니다. 열기를 눌러 복원하세요.')
-    def install_update(self,request):
-        from .update_install import prepare_install,launch_worker
-        if not self.confirm_image_change():return
-        try:plan=prepare_install(request,self.store.root)
-        except Exception as exc:self.error(str(exc));return
-        # closeEvent drains jobs and saves notes before the application quits.
-        self.closing_requested=True
-        def launch():
-            try:launch_worker(plan)
-            except Exception:
-                QMessageBox.critical(self,'업데이트 시작 실패','설치 도구를 시작하지 못했습니다. 기존 바로가기로 앱을 다시 실행하세요.')
-        QApplication.instance().aboutToQuit.connect(launch)
-        self.close()
-
     def save_window_state(self):
         self.save_browser_state()
         self.store.state('window',{'path':str(self.path) if self.path else None,'reference':self.reference.text(),
@@ -1484,7 +1467,6 @@ def main():
     import argparse
     parser=argparse.ArgumentParser(description='BMK AI Studio')
     parser.add_argument('--user-directory',metavar='FOLDER',help='사용자 데이터 폴더 (환경변수/설정보다 우선)')
-    parser.add_argument('--update-ready',help=argparse.SUPPRESS)
     parser.add_argument('images',nargs='*');options=parser.parse_args()
     data_location.session_directory=options.user_directory
     while True:
@@ -1505,9 +1487,6 @@ def main():
             except Exception as error:QMessageBox.critical(None,'폴더 선택 실패',str(error))
     try:
         window=Studio(root,location_config=data_location.config_path());window.show()
-        if options.update_ready:
-            from .update_install import notify_ready
-            notify_ready(options.update_ready,root)
         if options.images:window.add_paths(options.images)
         code=app.exec()
     finally:lock.unlock()

@@ -20,6 +20,10 @@ def run(args):
         result['tls_backend']=QSslSocket.activeBackend()
         root=Path(tempfile.mkdtemp(prefix='bmk-bundle-test-')).resolve();result['data']=str(root);result['version']=__version__
         app=QApplication([]);_application=app;configure_app(app);w=Studio(root/'data');errors=[];w.error=errors.append;w.show()
+        from .update_dialog import UpdateDialog
+        update=UpdateDialog(w);update.show();app.processEvents()
+        assert update.check.isEnabled() and not hasattr(update,'login_button')
+        update.reject();result['public_zip_update_ui']=True
         def wait(seconds=120):
             end=time.monotonic()+seconds
             while (w.jobs or w.library.search_pending) and time.monotonic()<end:app.processEvents();time.sleep(.02)

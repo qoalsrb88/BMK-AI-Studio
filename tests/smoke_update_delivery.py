@@ -7,7 +7,7 @@ from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication,QMessageBox
-from bmk_studio import update_dialog,update_transfer
+from bmk_studio import legacy_update_dialog as update_dialog,update_transfer
 from bmk_studio.update_credentials import LoginStore
 from bmk_studio.update_download import DownloadCancelled
 
@@ -63,25 +63,4 @@ with tempfile.TemporaryDirectory() as temporary,patch.dict(os.environ,{'LOCALAPP
     assert not closing.isVisible() and closing.downloaded is None
     app.processEvents()
 
-    # Installation is scheduled only after edit confirmation and normal Qt shutdown.
-    from bmk_studio.app import Studio,configure_app
-    from bmk_studio.core import Store
-    configure_app(app);window=Studio(root/'data');window.show()
-    note=window.store.save_note('update draft',{'prompt':'before','unknown':{'keep':True}})
-    window.open_note_id(note);window.draft.setPlainText('saved before update')
-    plan=root/'synthetic-plan.json'
-    with patch('bmk_studio.update_install.prepare_install',return_value=plan) as prepare,\
-         patch('bmk_studio.update_install.launch_worker') as launch:
-        with patch.object(window,'confirm_image_change',return_value=False):window.install_update({'fixture':True})
-        prepare.assert_not_called();launch.assert_not_called();assert window.isVisible()
-        with patch.object(window,'confirm_image_change',return_value=True):
-            app.setQuitOnLastWindowClosed(True)
-            QTimer.singleShot(0,lambda:window.install_update({'fixture':True}))
-            QTimer.singleShot(5000,app.quit)
-            app.exec()
-        prepare.assert_called_once_with({'fixture':True},window.store.root)
-        launch.assert_called_once_with(plan)
-    assert not window.isVisible() and not window.jobs
-    store=Store(root/'data');body=json.loads(store.note(note)[2]);store.db.close()
-    assert body['prompt']=='saved before update' and body['unknown']=={'keep':True}
-print('Download responsiveness, trust rejection, cancellation, saved notes and shutdown handoff passed')
+print('Legacy download responsiveness, trust rejection and cancellation passed')

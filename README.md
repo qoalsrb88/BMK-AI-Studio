@@ -1,6 +1,6 @@
 # BMK AI Studio
 
-Windows용 독립 이미지·프롬프트 작업실. 현재 소스 버전 **0.9.11** (자동 업데이트 개발판), Windows 베타입니다. 별도로 검증한 로컬 설치 후보는 **0.9.10**입니다. ComfyUI 서버 없이 실행하며 사용자 원본 이미지를 덮어쓰지 않습니다.
+Windows용 독립 이미지·프롬프트 작업실. 현재 버전 **0.9.12**, Windows 베타입니다. 소스와 실행 파일을 무료로 공개하는 개인용 유틸리티입니다. ComfyUI 서버 없이 실행하며 사용자 원본 이미지를 덮어쓰지 않습니다.
 
 ## 기능
 
@@ -11,6 +11,14 @@ Windows용 독립 이미지·프롬프트 작업실. 현재 소스 버전 **0.9.
 - 사용자 데이터 폴더 지정, 편집 작업 보관/복구와 원본 재연결.
 
 [사용 안내](docs/USAGE.md) · [개발/검증](docs/DEVELOPMENT.md) · [배포 준비](docs/RELEASING.md)
+
+## 다운로드하고 실행
+
+1. [GitHub 배포 페이지](https://github.com/qoalsrb88/BMK-AI-Studio/releases)에서 **0.9.12 CPU 또는 NVIDIA ZIP**을 받습니다. GPU가 없거나 가볍게 시작하려면 CPU판을 선택하세요. NVIDIA판은 호환 드라이버가 필요합니다.
+2. ZIP 전체를 새 폴더에 압축 해제합니다.
+3. `BMK-AI-Studio.exe`를 실행합니다. `_internal`을 포함한 폴더 전체를 함께 보관하세요.
+
+Python·ComfyUI 설치나 GitHub 로그인이 필요하지 않습니다. `Source code (zip)`은 개발용 소스이며 실행 파일이 아닙니다. 배포본에는 유료 코드 서명을 사용하지 않아 Windows 게시자/보안 경고가 표시될 수 있습니다. 공식 Release의 파일명과 SHA256을 확인하세요. [실행·업데이트 안내](docs/BINARY_README.md)를 참고하세요.
 
 ## 소스에서 실행
 
@@ -25,8 +33,6 @@ py -3.12 -m venv .venv
 
 위 명령은 CPU 구성이며 GPU가 없어도 사용할 수 있습니다. CUDA 구성은 [개발 안내](docs/DEVELOPMENT.md)를 참고하세요. 설치 후 `Start.cmd` 또는 콘솔 없는 `Start.vbs`로도 실행할 수 있습니다. 다른 PC의 가상환경을 그대로 복사하지 마세요.
 
-실행 파일은 [v0.9.8 Release](https://github.com/qoalsrb88/BMK-AI-Studio/releases/tag/v0.9.8)의 `BMK-AI-Studio-0.9.8-Windows-x64-NVIDIA.zip`을 사용하세요. 소스 ZIP에는 EXE와 모델이 없습니다. 압축을 모두 풀고 EXE와 `_internal`을 포함한 폴더 전체를 유지하세요. [실행·업데이트 안내](docs/BINARY_README.md)를 참고하세요.
-
 ## 데이터와 모델
 
 기본 데이터 위치는 `%LOCALAPPDATA%/BMK-AI-Studio`입니다. 설정에서 별도 폴더를 선택하거나 `--user-directory` 실행 옵션을 사용할 수 있습니다. 업데이트/백업 시 사용자 데이터 폴더와 외부 원본/모델을 따로 보존하세요.
@@ -37,7 +43,7 @@ py -3.12 -m venv .venv
 
 현재 소스 검사는 폴더 복사·업로드 제외 정책·배포 패키지 검사를 포함해 단위 테스트 130개, Qt 검사 27개입니다. 실행 파일의 GPU·압축 해제 검증 범위는 각 Release 안내에 기록합니다. [GitHub Actions 검사 결과](https://github.com/qoalsrb88/BMK-AI-Studio/actions/workflows/windows-tests.yml)는 각 커밋에서 확인할 수 있습니다. CI는 CPU·합성 데이터를 사용하며 실제 GPU/로컬 모델 검사는 별도입니다. 검증 결과가 모든 PC에서의 호환성을 보장하지는 않습니다.
 
-설정에 GitHub 브라우저 로그인과 수동 업데이트 확인을 제공합니다. [권한 설정 안내](docs/UPDATE_LOGIN_SETUP.md)를 참고하세요. 사용자가 실제 로그인과 비공개 배포 목록 조회를 확인했습니다. Qt의 Windows HTTPS는 Schannel을 사용해 다른 프로그램의 OpenSSL DLL과 충돌하지 않도록 합니다. 0.9.11 소스에는 CPU/NVIDIA 설치 파일 다운로드·취소·SHA256 검증과, 서명 확인 후 앱 종료·데이터 백업·새 폴더 설치·실패 복구 흐름을 추가했습니다. 실제 인증서가 없어 자동 설치는 비활성 상태이며, 서명된 배포본 간 전체 업데이트는 미검증입니다. PixAI 연동은 보류합니다. 자세한 단계와 검증 범위는 [배포 개선 기록](docs/DISTRIBUTION_PROGRESS.md)을 참고하세요. 의미 검색은 프롬프트/태그 텍스트 대상이며 이미지 픽셀 CLIP 검색이 아닙니다. 파일 탐색에는 원본 삭제·이동 기능이 없습니다. 기록되지 않은 생성 프롬프트나 실제 실행 분기를 추측하지 않습니다.
+설정 → 업데이트에서 로그인 없이 새 버전을 확인하고 GitHub 배포 페이지를 엽니다. 새 ZIP을 새 폴더에 풀고 기존 앱을 종료한 뒤 실행하는 수동 업데이트 방식입니다. 유료 서명과 자동 설치는 현재 배포 범위에 포함하지 않습니다. 이전 비공개 로그인·서명 업데이트 코드는 개발 참고용으로만 남겨두며 공개 앱 화면과 실행 진입점에는 연결하지 않습니다. Windows HTTPS는 Schannel을 사용합니다. PixAI 연동은 보류합니다. 자세한 이력은 [배포 개선 기록](docs/DISTRIBUTION_PROGRESS.md)을 참고하세요. 의미 검색은 프롬프트/태그 텍스트 대상이며 이미지 픽셀 CLIP 검색이 아닙니다. 파일 탐색에는 원본 삭제·이동 기능이 없습니다. 기록되지 않은 생성 프롬프트나 실제 실행 분기를 추측하지 않습니다.
 
 ## 라이선스
 

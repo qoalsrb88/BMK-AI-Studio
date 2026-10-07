@@ -1,10 +1,10 @@
-# Dependency sources for the Windows 0.9.8 package
+# Dependency sources for the Windows 0.9.12 packages
 
 The package uses unmodified PySide6 / Shiboken6 / Qt 6.11.2 from the official Python wheels. Qt and the bindings are dynamically loaded, under LGPLv3. The source commit of BMK AI Studio and runtime versions are in build-info.json beside the executable.
 
 ## Corresponding Qt and binding sources
 
-The same GitHub v0.9.8 Release provides these source archives beside the executable package. They are optional for running the app, and contain source/build instructions for modifying the libraries. Exact upstream copies and SHA256:
+The GitHub v0.9.12 Release provides these source archives beside the executable package. They are optional for running the app, and contain source/build instructions for modifying the libraries. Exact upstream copies and SHA256:
 
 | Archive | SHA256 | Official source |
 | --- | --- | --- |
