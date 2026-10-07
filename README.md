@@ -10,7 +10,7 @@ Windows용 독립 이미지·프롬프트 작업실. 현재 버전 **0.9.12**, W
 - 원본 프롬프트·추정 태그·작업 텍스트 구분, 로컬 WD 태깅과 다국어 텍스트 의미 검색.
 - 사용자 데이터 폴더 지정, 편집 작업 보관/복구와 원본 재연결.
 
-[사용 안내](docs/USAGE.md) · [개발/검증](docs/DEVELOPMENT.md) · [배포 준비](docs/RELEASING.md)
+[사용 안내](docs/USAGE.md) · [개발/검증](docs/DEVELOPMENT.md) · [유지보수 핸드오프](docs/HANDOFF.md) · [배포 준비](docs/RELEASING.md)
 
 ## 다운로드하고 실행
 

@@ -1,5 +1,6 @@
 # BMK AI Studio development
 
+- For a new maintenance or improvement session, read docs/HANDOFF.md, verify the current Git state, and follow the user's requested scope for that session.
 - This is a standalone Windows app. Never import ComfyUI server, folder_paths or node loader in application code.
 - Vendor snapshots are isolated; their optional imports must remain optional.
 - Keep original metadata, inferred tags, and work prompts separate. Never fabricate a missing source prompt.
