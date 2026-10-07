@@ -13,6 +13,11 @@ def run(args):
         from .app import Studio,configure_app
         from .core import fingerprint,save_derived,stitch_image,tone_restore
         from . import __version__
+        from .update_network import configure_update_tls
+        from PySide6.QtNetwork import QSslSocket
+        configure_update_tls()
+        assert QSslSocket.supportsSsl(), 'Packaged TLS backend unavailable'
+        result['tls_backend']=QSslSocket.activeBackend()
         root=Path(tempfile.mkdtemp(prefix='bmk-bundle-test-')).resolve();result['data']=str(root);result['version']=__version__
         app=QApplication([]);_application=app;configure_app(app);w=Studio(root/'data');errors=[];w.error=errors.append;w.show()
         def wait(seconds=120):

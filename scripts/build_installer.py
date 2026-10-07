@@ -1,4 +1,4 @@
-"""Create an unsigned, version-isolated Inno Setup installer from a verified bundle."""
+"""Create a version-isolated installer; signed builds require verified publisher signatures."""
 import argparse
 import json
 from pathlib import Path
@@ -14,7 +14,7 @@ def quoted(value):
     return '"' + value + '"'
 
 
-def make_script(bundle, output, report):
+def make_script(bundle, output, report, signer=None):
     version = report['build']['version']
     if not re.fullmatch(r'\d+\.\d+\.\d+', version):
         raise ValueError('Numeric release version required')
@@ -38,6 +38,9 @@ def make_script(bundle, output, report):
         '[Tasks]', 'Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked',
         '[Files]',
     ]
+    if signer is not None:
+        lines[1:1] = ['SignTool=bmkpublisher', 'SignedUninstaller=yes',
+                      'SignedUninstallerDir=' + quoted(output / 'signed-uninstaller')]
     for item in report['files']:
         rel = Path(item['path'])
         dest = '{app}' + ('\\' + str(rel.parent) if rel.parent != Path('.') else '')
@@ -73,26 +76,41 @@ def make_script(bundle, output, report):
     return '\n'.join(lines) + '\n'
 
 
-def build(bundle, output, compiler):
+def build(bundle, output, compiler, signer=None):
     bundle, output = Path(bundle).resolve(), Path(output).resolve()
     if output.exists():
         raise FileExistsError('Choose a new installer output directory')
     if bundle == output or bundle in output.parents:
         raise ValueError('Output must be outside the bundle')
     report = inspect_bundle(bundle)
-    script = make_script(bundle, output, report)
+    if signer is not None:
+        if report['build'].get('signed') is not True:
+            raise ValueError('Sign a copy of the application bundle first')
+        signer.verify(bundle / 'BMK-AI-Studio.exe')
+    script = make_script(bundle, output, report, signer)
     output.mkdir(parents=True)
     source = output / 'installer.iss'
     source.write_text(script, encoding='utf-8-sig')
+    command = [str(Path(compiler).resolve()), '/Q']
+    if signer is not None:
+        command.append('/Sbmkpublisher=' + signer.inno_command())
+    command.append(str(source))
     with (output / 'compiler.log').open('w', encoding='utf-8') as log:
-        subprocess.run([str(Path(compiler).resolve()), '/Q', str(source)], check=True,
+        subprocess.run(command, check=True,
                        stdout=log, stderr=subprocess.STDOUT)
     installers = list(output.glob('*-Setup.exe'))
     if len(installers) != 1:
         raise RuntimeError('Expected exactly one installer')
     exe = installers[0]
+    signatures = {}
+    if signer is not None:
+        signatures['setup'] = signer.verify(exe)
+        uninstallers = list((output / 'signed-uninstaller').glob('*.exe'))
+        if not uninstallers:
+            raise RuntimeError('Signed uninstaller evidence missing')
+        signatures['uninstallers'] = [signer.verify(path) for path in uninstallers]
     receipt = {'build': report['build'], 'installer': exe.name, 'bytes': exe.stat().st_size,
-               'sha256': digest(exe), 'signed': False, 'tested_install_uninstall': False,
+               'sha256': digest(exe), 'signed': signer is not None, 'signatures': signatures, 'tested_install_uninstall': False,
                'layout': 'Version-isolated; original data and previous versions retained'}
     (output / 'installer.json').write_text(json.dumps(receipt, indent=2), encoding='utf-8')
     print(json.dumps(receipt, indent=2))
@@ -101,5 +119,8 @@ def build(bundle, output, compiler):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('bundle'); parser.add_argument('output'); parser.add_argument('--compiler', required=True)
+    parser.add_argument('--signing-config', type=Path)
     args = parser.parse_args()
-    build(args.bundle, args.output, args.compiler)
+    from sign_release import Signer
+    signer = Signer(args.signing_config) if args.signing_config else None
+    build(args.bundle, args.output, args.compiler, signer)
