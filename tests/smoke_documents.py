@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
-from PySide6.QtCore import QPoint,QTimer,Qt
+from PySide6.QtCore import QCoreApplication,QEvent,QPoint,QTimer,Qt
 from PySide6.QtGui import QContextMenuEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication,QMenu
@@ -16,6 +16,15 @@ from test_metadata import graph
 
 root=Path(tempfile.mkdtemp(prefix='bmk-documents-')).resolve()
 app=QApplication([]);configure_app(app)
+
+def close_window():
+    app.processEvents()  # Finish queued layout/scroll restoration before deletion.
+    assert w.close()
+    # close() only hides the widget. Destroy it before the next Studio refreshes
+    # all prompt highlighters and can restart autosave against its closed DB.
+    w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
+    app.processEvents()
+
 w=Studio(root/'data');w.show()
 meta=PngInfo();meta.add_text('parameters','actual output\nNegative prompt: original bad\nSteps: 12, Seed: 7');meta.add_text('prompt',json.dumps(graph()))
 path=root/'image.png';Image.new('RGB',(64,64),'red').save(path,pnginfo=meta)
@@ -43,9 +52,9 @@ assert w.draft.toPlainText()=='bird';assert w.positive.toPlainText()=='actual ou
 assert '42' in w.branch_preview.toPlainText();assert '7' in w.generation_settings.toPlainText()
 app.processEvents();w.tabs.setCurrentIndex(1);w.grab().save(str(root/'notes.png'))
 w.tabs.setCurrentIndex(4);app.processEvents();w.grab().save(str(root/'metadata.png'))
-w.open_note_id(first);w.close();app.processEvents()
+w.open_note_id(first);close_window()
 w=Studio(root/'data');assert w.note_tabs.count()==3;assert w.note_id==first
-assert w.draft.toPlainText()=='one';w.close();app.processEvents()
+assert w.draft.toPlainText()=='one';close_window()
 subprocess.run([sys.executable,'-c',
     "from PySide6.QtWidgets import QApplication; from bmk_studio.app import Studio; import sys; app=QApplication([]); w=Studio(sys.argv[1]); assert w.note_tabs.count()==3; assert w.note_id==sys.argv[2]; assert w.draft.toPlainText()=='one'; w.close()",
     str(root/'data'),first],check=True,cwd=Path(__file__).resolve().parents[1])
@@ -98,8 +107,8 @@ for case,(choice,target,active,remaining) in enumerate((
     assert (body['prompt'],body['negative'],body['notes'])==(edited,'unsaved negative','unsaved memo')
     for i,nid in enumerate(ids):assert json.loads(w.store.note(nid)[2])['custom']=={'retained':i}
     state=w.store.state('documents');assert state['ids']==expected and state['active']==w.note_id
-    w.close();app.processEvents();w=Studio(profile)
-    assert open_ids()==expected and w.note_id==state['active'];w.close();app.processEvents()
+    close_window();w=Studio(profile)
+    assert open_ids()==expected and w.note_id==state['active'];close_window()
 
 # Boundaries, dismissal and empty space; closing the final draft saves it and opens an empty tab.
 w=Studio(root/'menu-boundaries');w.show();w.main_tabs.setCurrentIndex(2)
@@ -114,5 +123,5 @@ with patch('bmk_studio.app.QMenu.exec',return_value=None) as menu_exec:
     pos=QPoint(-10,-10)
     QApplication.sendEvent(w.note_tabs,QContextMenuEvent(QContextMenuEvent.Reason.Mouse,pos,w.note_tabs.mapToGlobal(pos)))
     menu_exec.assert_not_called()
-w.close();app.processEvents()
+close_window()
 print('PASS: multiple notes, context-menu close actions and boundaries, autosave, editor retention, restart, image draft separation, restore, new tab, branch copy and original priority; screenshots:',root)
