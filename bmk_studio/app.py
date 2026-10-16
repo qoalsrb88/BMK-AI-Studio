@@ -234,7 +234,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.watch_job=None
         self.folder=None
         self.load_stamp=None
-        self.closing_requested=False
+        self.closing_requested=False;self.closed=False
         self.build()
         self.appearance=self.store.state('appearance') or {}
         self.apply_appearance()
@@ -817,6 +817,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.note_category.addItems(['']+sorted({r[3] for r in self.store.note_entries() if r[3]}));self.note_category.setCurrentText(current);self.note_category.blockSignals(False)
     def save_draft(self):
         self.autosave.stop()
+        if self.closed:return
         if self.path and not self.loading and not self.note_mode:
             self.store.save_asset(self.path,self.info,self.draft.toPlainText(),self.draft_negative.toPlainText(),self.memo.toPlainText())
             self.search_extra.setdefault(str(self.path),{})['work']='\n'.join((self.draft.toPlainText(),self.draft_negative.toPlainText(),self.memo.toPlainText()))
@@ -1465,9 +1466,14 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         if box.clickedButton() is keep:return self.save_edit_session()
         if box.clickedButton() is discard:self.discard_recovery(self.path);return True
         return False
+    def finish_close(self,event):
+        self.closed=True;self.closing_requested=True
+        self.autosave.stop();self.recovery_timer.stop();self.workspace_timer.stop()
+        self.store.db.close();event.accept()
     def closeEvent(self,event):
+        if self.closed:event.accept();return
         if self.data_switch_ready:
-            self.store.db.close();event.accept();return
+            self.finish_close(event);return
         if not self.closing_requested and not self.confirm_image_change():event.ignore();return
         self.save_main_workspace();self.disk_browser.set_active(False);self.disk_browser.save()
         self.library.stop_search()
@@ -1477,7 +1483,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
             for job in list(self.jobs):job.requestInterruption()
             self.statusBar().showMessage('진행 중인 배치를 마무리하고 안전하게 종료합니다.')
             QTimer.singleShot(150,self.close);event.ignore();return
-        self.workspace_timer.stop();self.save_draft();self.save_documents();self.save_window_state();self.store.db.close();event.accept()
+        self.workspace_timer.stop();self.save_draft();self.save_documents();self.save_window_state();self.finish_close(event)
 
 def main():
     app=QApplication(sys.argv);configure_app(app)
