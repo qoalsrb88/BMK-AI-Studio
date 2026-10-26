@@ -92,7 +92,7 @@ class DiskBrowser(QWidget):
         self.view.doubleClicked.connect(self.activate);self.view.selectionModel().currentChanged.connect(self.selection_changed);self.view.selectionModel().selectionChanged.connect(self.selection_count)
         self.timer=QTimer(self);self.timer.setInterval(70);self.timer.timeout.connect(self.start_thumbnails)
         self.preview_timer=QTimer(self);self.preview_timer.setSingleShot(True);self.preview_timer.setInterval(120);self.preview_timer.timeout.connect(self.start_preview)
-        self.refresh_action=QAction('새로 고침',self);self.select_all_action=QAction('모두 선택',self);self.copy_paths_action=QAction('경로 복사',self)
+        self.refresh_action=QAction('새로고침',self);self.select_all_action=QAction('모두 선택',self);self.copy_paths_action=QAction('경로 복사',self)
         # Ctrl+A belongs to the thumbnails only, so read-only preview text keeps its own select-all.
         for item,sequence,callback,scope in [(self.refresh_action,'F5',lambda:self.open_folder(self.folder,refresh=True),self),(self.select_all_action,'Ctrl+A',self.view.selectAll,self.view),(self.copy_paths_action,'Ctrl+Shift+C',self.copy_selection,self)]:
             item.setShortcut(QKeySequence(sequence));item.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut);item.triggered.connect(callback);scope.addAction(item)
@@ -154,7 +154,7 @@ class DiskBrowser(QWidget):
         elif self.paths_exist([path]):paths.append(path)
         else:return False
         self.state['favorites']=paths;self.refresh_favorites();self.save();return True
-    def report_missing(self,path):self.owner.statusBar().showMessage('파일을 찾을 수 없습니다: '+(Path(path).name or str(Path(path))))
+    def report_missing(self,path):self.owner.statusBar().showMessage('경로를 찾을 수 없습니다: '+(Path(path).name or str(Path(path))))
     def paths_exist(self,paths):
         for path in paths:
             if not Path(path).exists():self.report_missing(path);return False
@@ -172,7 +172,7 @@ class DiskBrowser(QWidget):
     def copy_references(self,paths,names=False):
         if not self.paths_exist(paths):return False
         count=shell_actions.copy_paths(paths,names=names)
-        if count:self.owner.statusBar().showMessage(f'{"파일 이름" if names else "경로"} {count}개를 복사했습니다.')
+        if count:self.owner.statusBar().showMessage(f'{"파일명" if names else "경로"} {count}개를 복사했습니다.')
         return count
     def selected_rows(self):return [self.proxy.data(i,Qt.ItemDataRole.UserRole) for i in self.view.selectedIndexes()]
     def copy_selection(self,names=False):
@@ -206,7 +206,7 @@ class DiskBrowser(QWidget):
             menu.addAction('프롬프트를 노트에 저장…',self.save_selected_prompt).setEnabled(len(rows)==1 and not rows[0][2]);menu.addSeparator()
             menu.addAction('기본 앱으로 열기',lambda:self.shell_open(row[0],True)).setEnabled(len(rows)==1)
             menu.addAction('탐색기에서 위치 열기',lambda:self.shell_open(row[0]));menu.addAction(self.copy_paths_action)
-            menu.addAction('파일 이름 복사',lambda:self.copy_selection(True))
+            menu.addAction('파일명 복사',lambda:self.copy_selection(True))
         else:
             menu.addAction(self.refresh_action);menu.addAction(self.select_all_action);menu.addSeparator()
             path=self.folder;menu.addAction('탐색기에서 열기',lambda:self.shell_open(path)).setEnabled(bool(path));menu.addAction(self.copy_paths_action)

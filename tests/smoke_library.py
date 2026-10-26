@@ -78,7 +78,7 @@ def context_checks(paged):
     library.doItemsLayout()
     expected=['즐겨찾기 추가','즐겨찾기 해제 (별점도 해제)','개인 별점 · 모델 rating과 별개','컬렉션에 추가','',
               '태깅 대기열에 추가','목록에서 제거 · 원본 유지','','기본 앱으로 열기','탐색기에서 위치 열기',
-              '파일 탐색에서 이 폴더 열기','경로 복사','파일 이름 복사']
+              '파일 탐색 탭에서 이 폴더 열기','경로 복사','파일명 복사']
     def select(*rows):
         library.clearSelection()
         for row in rows:library.selectionModel().select(library.proxy.index(row,0),QItemSelectionModel.SelectionFlag.Select)
@@ -109,9 +109,9 @@ def context_checks(paged):
     selected=window.selection_paths();items['경로 복사'].trigger()
     copy_paths.assert_called_with(selected,names=False);assert app.clipboard().text()=='\n'.join(selected)
     assert window.statusBar().currentMessage()=='경로 2개를 복사했습니다.'
-    items['파일 이름 복사'].trigger();copy_paths.assert_called_with(selected,names=True)
+    items['파일명 복사'].trigger();copy_paths.assert_called_with(selected,names=True)
     assert app.clipboard().text()=='\n'.join(Path(value).name for value in selected)
-    assert window.statusBar().currentMessage()=='파일 이름 2개를 복사했습니다.'
+    assert window.statusBar().currentMessage()=='파일명 2개를 복사했습니다.'
     reveal.reset_mock();items['탐색기에서 위치 열기'].trigger();reveal.assert_called_once_with(str(paths[1]))
     menu,items=context(2);assert window.selection_paths()==[str(paths[2])]
     assert all(items[label].isEnabled() for label in expected[8:11])
@@ -131,14 +131,14 @@ def context_checks(paged):
     old=folder/'old';old.mkdir();Image.new('RGB',(8,8)).save(old/'old.png');panel=window.disk_browser;panel.state['folder']=str(old)
     menu,items=context(1)
     with patch.object(window,'run_discovery') as run:
-        items['파일 탐색에서 이 폴더 열기'].trigger()
+        items['파일 탐색 탭에서 이 폴더 열기'].trigger()
         assert window.main_tabs.currentIndex()==0 and panel.active
         scans=list(run.call_args_list);assert len(scans)>=2
         scans[-1].args[2](scans[-1].args[1](type('Job',(),{'isInterruptionRequested':lambda self:False})()))
         for call in reversed(scans[:-1]):call.args[2]((([(str(old/'old.png'),'old.png',False,0,0)],0),None))
         assert panel.folder==str(target) and {row[1] for row in panel.model.rows}=={source.name for source in paths}
     panel.scan_job=None;window.main_tabs.setCurrentIndex(1);app.processEvents()
-    menu,items=context(0);items['파일 탐색에서 이 폴더 열기'].trigger();wait(window)
+    menu,items=context(0);items['파일 탐색 탭에서 이 폴더 열기'].trigger();wait(window)
     assert panel.folder==str(target) and window.main_tabs.currentIndex()==0
     window.main_tabs.setCurrentIndex(1);app.processEvents();select(0,1);library.setFocus();app.processEvents();assert library.hasFocus()
     for modifier in (Qt.KeyboardModifier.ControlModifier,Qt.KeyboardModifier.ShiftModifier,Qt.KeyboardModifier.AltModifier):

@@ -72,7 +72,7 @@ def context_menu(index,choice=None,enabled=(True,True,True,True)):
     seen=[];errors=[];active=w.note_id
     def choose(menu,*args):
         actions=menu.actions();seen.extend(actions)
-        assert [a.text() for a in actions]==['이 탭 닫기','오른쪽 탭 모두 닫기','왼쪽 탭 모두 닫기','나머지 탭 모두 닫기','모든 노트 탭 닫기','','닫은 탭 다시 열기']
+        assert [a.text() for a in actions]==['이 탭 닫기','오른쪽 탭 모두 닫기','왼쪽 탭 모두 닫기','나머지 탭 모두 닫기','모든 탭 닫기','','닫은 탭 다시 열기']
         assert tuple(a.isEnabled() for a in actions[:4])==enabled
         assert actions[-1].shortcut().toString()=='Ctrl+Shift+T'
         assert w.note_id==active
@@ -173,7 +173,7 @@ w.open_note_id(ids[0]);app.processEvents();index=w.document_index
 QTest.mouseClick(w.note_tabs,Qt.MouseButton.MiddleButton,pos=w.note_tabs.tabRect(index).center())
 assert ids[0] not in open_ids() and w.closed_note_ids[-1]==ids[0]
 w.close_document(0);assert w.note_tabs.tabData(0).get('image')
-menu=w.make_note_tab_menu(-1);assert [a.text() for a in menu.actions()]==['새 노트','닫은 탭 다시 열기','모든 노트 탭 닫기'];assert menu.actions()[0].shortcut().toString()=='Ctrl+N';menu.actions()[-1].trigger();menu.deleteLater()
+menu=w.make_note_tab_menu(-1);assert [a.text() for a in menu.actions()]==['새 노트','닫은 탭 다시 열기','모든 탭 닫기'];assert menu.actions()[0].shortcut().toString()=='Ctrl+N';menu.actions()[-1].trigger();menu.deleteLater()
 assert open_ids()==[None] and w.note_mode and not w.draft.toPlainText()
 close_window();w=Studio(root/'reopen');assert not w.closed_note_ids;close_window()
 
@@ -225,7 +225,7 @@ QTest.mouseClick(w.notes.viewport(),Qt.MouseButton.RightButton,pos=pos);assert w
 with patch('bmk_studio.shell_actions.select_for_context',wraps=__import__('bmk_studio.shell_actions',fromlist=['select_for_context']).select_for_context) as select_context:
     w.note_tree_context_menu(pos);select_context.assert_called_once()
 assert w.note_id==second and w.notes.currentItem().data(0,Qt.ItemDataRole.UserRole)==first
-menu=w.make_note_tree_menu(tree_item(first));assert [a.text() for a in menu.actions()]==['열기','이름 바꾸기','복제','보관함으로 옮기기','','버전 이력','JSON 내보내기']
+menu=w.make_note_tree_menu(tree_item(first));assert [a.text() for a in menu.actions()]==['열기','이름 바꾸기…','복제','보관함으로 옮기기','','버전 이력','JSON 내보내기']
 assert menu.actions()[1].shortcut().toString()=='F2';menu.deleteLater()
 before=json.loads(w.store.note(first)[2]);revisions=len(w.store.revisions(first))
 with patch('bmk_studio.app.QInputDialog.getText',return_value=('renamed first',True)) as prompt:
@@ -251,7 +251,7 @@ w.show_archived.setChecked(False)
 for label,method in [('버전 이력','note_history'),('JSON 내보내기','export_note')]:
     with patch.object(w,method) as callback:
         menu=w.make_note_tree_menu(tree_item(second));next(a for a in menu.actions() if a.text()==label).trigger();assert w.note_id==second;callback.assert_called_once();menu.deleteLater()
-menu=w.make_note_tree_menu(tree_item(folder='/Characters/Clothes'));assert [a.text() for a in menu.actions()]==['이 폴더에 새 노트','','모두 펼치기','모두 접기'];menu.actions()[0].trigger();menu.deleteLater()
+menu=w.make_note_tree_menu(tree_item(folder='/Characters/Clothes'));assert [a.text() for a in menu.actions()]==['이 폴더에 새 노트 만들기','','모두 펼치기','모두 접기'];menu.actions()[0].trigger();menu.deleteLater()
 assert w.note_category.currentText()=='Characters/Clothes';count=len(w.store.note_entries());w.save_draft();assert w.note_id is None and len(w.store.note_entries())==count
 w.new_folder_note('/미분류');assert not w.note_category.currentText()
 menu=w.make_note_tree_menu(None);assert [a.text() for a in menu.actions()]==['새 노트','','모두 펼치기','모두 접기'];menu.actions()[-1].trigger();menu.deleteLater()

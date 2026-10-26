@@ -395,7 +395,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.notes = QTreeWidget();self.notes.setHeaderHidden(True); self.notes.itemClicked.connect(self.open_note); nl.addWidget(self.notes,2)
         self.notes.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu);self.notes.customContextMenuRequested.connect(self.note_tree_context_menu)
         self.notes.itemCollapsed.connect(self.save_note_tree);self.notes.itemExpanded.connect(self.save_note_tree)
-        self.rename_note_action=QAction('이름 바꾸기',self.notes);self.rename_note_action.setShortcut(QKeySequence('F2'));self.rename_note_action.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+        self.rename_note_action=QAction('이름 바꾸기…',self.notes);self.rename_note_action.setShortcut(QKeySequence('F2'));self.rename_note_action.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
         self.rename_note_action.triggered.connect(lambda:self.rename_tree_note());self.notes.addAction(self.rename_note_action)
         # Column 1 carries the note count per folder; icons distinguish folders from documents.
         self.notes.setColumnCount(2);self.notes.setIconSize(QSize(16,16));self.notes.header().setStretchLastSection(False)
@@ -857,7 +857,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
             menu.addSeparator();menu.addAction('버전 이력',lambda:self.tree_note_action(nid,self.note_history));menu.addAction('JSON 내보내기',lambda:self.tree_note_action(nid,self.export_note))
         else:
             if item:
-                path=item.data(0,Qt.ItemDataRole.UserRole+1);menu.addAction('이 폴더에 새 노트',lambda:self.new_folder_note(path))
+                path=item.data(0,Qt.ItemDataRole.UserRole+1);menu.addAction('이 폴더에 새 노트 만들기',lambda:self.new_folder_note(path))
             else:menu.addAction(self.note_shortcuts['Ctrl+N'])
             menu.addSeparator();menu.addAction('모두 펼치기',lambda:self.expand_note_folders(True));menu.addAction('모두 접기',lambda:self.expand_note_folders(False))
         return menu
@@ -1001,7 +1001,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
                 action=menu.addAction(label);action.setEnabled(bool(indices));action.triggered.connect(lambda checked=False,targets=indices:self.close_documents(targets))
         else:
             menu.addAction(self.note_shortcuts['Ctrl+N']);menu.addAction(self.note_shortcuts['Ctrl+Shift+T'])
-        action=menu.addAction('모든 노트 탭 닫기',lambda:self.close_documents(list(range(1,self.note_tabs.count()))));action.setEnabled(self.note_tabs.count()>1)
+        action=menu.addAction('모든 탭 닫기',lambda:self.close_documents(list(range(1,self.note_tabs.count()))));action.setEnabled(self.note_tabs.count()>1)
         if index>0:menu.addSeparator();menu.addAction(self.note_shortcuts['Ctrl+Shift+T'])
         self.update_note_shortcuts();return menu
     def note_tab_context_menu(self,pos):

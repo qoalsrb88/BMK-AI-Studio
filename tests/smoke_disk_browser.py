@@ -62,7 +62,7 @@ def popup(view,idx=QModelIndex(),choose=None):
     return captured[0]
 def enabled(items,label):return next(item[1] for item in items if item and item[0]==label)
 def labels(items):return [item[0] if item else None for item in items]
-file_labels=['라이브러리에 추가','프롬프트를 노트에 저장…',None,'기본 앱으로 열기','탐색기에서 위치 열기','경로 복사','파일 이름 복사']
+file_labels=['라이브러리에 추가','프롬프트를 노트에 저장…',None,'기본 앱으로 열기','탐색기에서 위치 열기','경로 복사','파일명 복사']
 folder_labels=['열기','즐겨찾는 경로에 추가',None,'탐색기에서 열기','경로 복사']
 d.view.setCurrentIndex(index('A.png'));wait(lambda:'rainy city' in d.metadata.toPlainText())
 assert d.viewer.image_rect.width()==320 and w.path is None and w.library.count()==0
@@ -80,8 +80,8 @@ open_default.assert_called_once_with(str(a))
 popup(d.view,index('A.png'),'탐색기에서 위치 열기');reveal.assert_called_with(str(a))
 select('A.png','child');items=popup(d.view,index('A.png'),'경로 복사')
 assert set(app.clipboard().text().splitlines())=={str(a),str(folder/'child')} and not enabled(items,'프롬프트를 노트에 저장…')
-popup(d.view,index('A.png'),'파일 이름 복사');assert set(app.clipboard().text().splitlines())=={'A.png','child'}
-assert w.statusBar().currentMessage()=='파일 이름 2개를 복사했습니다.'
+popup(d.view,index('A.png'),'파일명 복사');assert set(app.clipboard().text().splitlines())=={'A.png','child'}
+assert w.statusBar().currentMessage()=='파일명 2개를 복사했습니다.'
 with patch.object(w,'add_paths') as add_paths:
     popup(d.view,index('A.png'),'라이브러리에 추가');add_paths.assert_called_once_with([str(a)],open_first=False)
 select('A.png')
@@ -94,15 +94,15 @@ select('B.png');d.view.selectionModel().setCurrentIndex(index('A.png'),QItemSele
 with patch.object(w,'save_image_to_note') as save_note:
     assert d.save_selected_prompt() and d.preview_path==str(b);save_note.assert_called_once_with(True)
 select('A.png','B.png');items=popup(d.view)
-assert labels(items)==['새로 고침','모두 선택',None,'탐색기에서 열기','경로 복사','즐겨찾는 경로에서 제거'] and not selected()
-assert {item[0]:item[2] for item in items if item and item[2]}=={'새로 고침':'F5','모두 선택':'Ctrl+A','경로 복사':'Ctrl+Shift+C'}
+assert labels(items)==['새로고침','모두 선택',None,'탐색기에서 열기','경로 복사','즐겨찾는 경로에서 제거'] and not selected()
+assert {item[0]:item[2] for item in items if item and item[2]}=={'새로고침':'F5','모두 선택':'Ctrl+A','경로 복사':'Ctrl+Shift+C'}
 popup(d.view,choose='경로 복사');assert app.clipboard().text()==str(folder)
 popup(d.view,choose='탐색기에서 열기');reveal.assert_called_with(str(folder))
 popup(d.view,choose='모두 선택');assert selected()=={'A.png','B.png','child'}
 with patch.object(d,'navigate') as navigate:
-    popup(d.view,choose='새로 고침');navigate.assert_called_once_with(str(folder),refresh=True)
+    popup(d.view,choose='새로고침');navigate.assert_called_once_with(str(folder),refresh=True)
 old_folder=d.folder;d.folder='';d.update_navigation();items=popup(d.view)
-assert all(not enabled(items,name) for name in ('새로 고침','탐색기에서 열기','경로 복사','즐겨찾는 경로에 추가'))
+assert all(not enabled(items,name) for name in ('새로고침','탐색기에서 열기','경로 복사','즐겨찾는 경로에 추가'))
 d.folder=old_folder;d.update_navigation()
 # Favorite edits refresh both navigation lists; clicked(bool) keeps the toolbar's current-folder target.
 def favorite_present(path):
@@ -156,16 +156,16 @@ select('gone.png');d.preview_timer.stop();gone.unlink();copy_paths.reset_mock()
 with patch.object(w,'add_paths') as add_paths,patch.object(w,'save_image_to_note') as save_note:
     assert d.add_selected() is False and d.save_selected_prompt() is False and d.copy_selection() is False
     add_paths.assert_not_called();save_note.assert_not_called();copy_paths.assert_not_called()
-assert w.statusBar().currentMessage()=='파일을 찾을 수 없습니다: gone.png'
+assert w.statusBar().currentMessage()=='경로를 찾을 수 없습니다: gone.png'
 for default,mock in [(False,reveal),(True,open_default)]:
-    mock.return_value=False;assert d.shell_open(str(gone),default) is False;assert w.statusBar().currentMessage()=='파일을 찾을 수 없습니다: gone.png';mock.return_value=True
+    mock.return_value=False;assert d.shell_open(str(gone),default) is False;assert w.statusBar().currentMessage()=='경로를 찾을 수 없습니다: gone.png';mock.return_value=True
 with patch.object(d,'navigate') as navigate:
     assert d.open_folder(str(root/'missing')) is False and d.toggle_favorite(str(root/'missing')) is False;navigate.assert_not_called()
-assert w.statusBar().currentMessage()=='파일을 찾을 수 없습니다: missing'
+assert w.statusBar().currentMessage()=='경로를 찾을 수 없습니다: missing'
 # Stale favorites stay removable, matching ignores case, and drive roots keep a readable name.
 stale=root/'stale';stale.mkdir();assert d.toggle_favorite(str(stale)) and d.toggle_favorite(str(stale).upper()) and str(stale) not in d.state['favorites']
 d.toggle_favorite(str(stale));stale.rmdir();assert d.toggle_favorite(str(stale)) and str(stale) not in d.state['favorites'] and favorite_present(str(stale))==(False,False)
-d.paths_exist(['Q:\\']);assert w.statusBar().currentMessage()=='파일을 찾을 수 없습니다: Q:\\'
+d.paths_exist(['Q:\\']);assert w.statusBar().currentMessage()=='경로를 찾을 수 없습니다: Q:\\'
 # Ctrl+A in read-only preview text selects that text, not the thumbnails.
 d.view.clearSelection();d.metadata.setPlainText('line one\nline two');d.info_tabs.setCurrentIndex(2);app.processEvents();d.metadata.setFocus();app.processEvents()
 QTest.keyClick(d.metadata,Qt.Key.Key_A,Qt.KeyboardModifier.ControlModifier);assert d.metadata.textCursor().hasSelection() and not d.view.selectedIndexes()

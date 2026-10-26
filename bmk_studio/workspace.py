@@ -195,8 +195,8 @@ class WorkspaceMixin:
         menu.addSeparator();exists=Path(context_path).is_file()
         menu.addAction('기본 앱으로 열기',lambda:self.open_library_external(paths[0],shell_actions.open_default)).setEnabled(len(paths)==1 and Path(paths[0]).is_file())
         menu.addAction('탐색기에서 위치 열기',lambda:self.open_library_external(context_path,shell_actions.reveal_in_explorer)).setEnabled(exists)
-        menu.addAction('파일 탐색에서 이 폴더 열기',lambda:self.open_library_folder(context_path)).setEnabled(exists)
-        menu.addAction('경로 복사',lambda:self.copy_library_paths(paths));menu.addAction('파일 이름 복사',lambda:self.copy_library_paths(paths,True))
+        menu.addAction('파일 탐색 탭에서 이 폴더 열기',lambda:self.open_library_folder(context_path)).setEnabled(exists)
+        menu.addAction('경로 복사',lambda:self.copy_library_paths(paths));menu.addAction('파일명 복사',lambda:self.copy_library_paths(paths,True))
         return menu
 
     def build_library_background_menu(self):
@@ -222,7 +222,7 @@ class WorkspaceMixin:
         self.main_tabs.setCurrentIndex(0);self.disk_browser.navigate(str(Path(path).parent))
 
     def copy_library_paths(self,paths,names=False):
-        count=shell_actions.copy_paths(paths,names=names);self.statusBar().showMessage(f'{"파일 이름" if names else "경로"} {count}개를 복사했습니다.',4000)
+        count=shell_actions.copy_paths(paths,names=names);self.statusBar().showMessage(f'{"파일명" if names else "경로"} {count}개를 복사했습니다.',4000)
 
     def mark_favorite(self,on):
         paths=self.selection_paths();set_favorites(self.store.db,paths,on);self.refresh_favorite_badges();self.library.refresh_query();self.update_workspace_status()
