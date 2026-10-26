@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (QListView,QStyledItemDelegate,QStyleOptionViewIte
 from .appearance import caption,icon as line_icon,pixmap,tokens
 from .hints import paint_hint
 from .cards import paint_card
+from . import shell_actions
 
 class CardDelegate(QStyledItemDelegate):
     """Explorer card: folders show a light glyph tile, images their thumbnail; names wrap to two lines."""
@@ -22,6 +23,12 @@ class CardDelegate(QStyledItemDelegate):
 
 class ExplorerView(QListView):
     def __init__(self,panel):super().__init__();self.panel=panel;self.wheel_remainder=0;self.setItemDelegate(CardDelegate(self))
+    def mousePressEvent(self,event):
+        if event.button()==Qt.MouseButton.RightButton:event.accept();return
+        super().mousePressEvent(event)
+    def mouseReleaseEvent(self,event):
+        if event.button()==Qt.MouseButton.RightButton:event.accept();return
+        super().mouseReleaseEvent(event)
     def wheelEvent(self,event):
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             self.wheel_remainder+=event.angleDelta().y() or event.pixelDelta().y()
@@ -64,15 +71,25 @@ class NavigationPane(QWidget):
         for column in (1,2,3):self.tree.hideColumn(column)
         self.tree.clicked.connect(lambda index:panel.navigate(self.fs.filePath(index)))
         self.fs.directoryLoaded.connect(lambda path:self.sync() if self.panel.folder and (os.path.normcase(self.panel.folder)==os.path.normcase(path) or os.path.normcase(self.panel.folder).startswith(os.path.normcase(path).rstrip('\\/')+os.sep)) else None);self.refresh_quick()
-        self.tree.viewport().installEventFilter(self)
-        for sequence,callback in [('Alt+Left',lambda:panel.travel(-1)),('Alt+Right',lambda:panel.travel(1)),('Alt+Up',self.up),('Alt+D',self.address),('Ctrl+L',self.address),('Ctrl+F',self.search),('F5',lambda:panel.navigate(panel.folder,refresh=True))]:
+        for view in (self.tree,self.quick):
+            view.viewport().installEventFilter(self);view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu);view.customContextMenuRequested.connect(lambda pos,view=view:self.show_context_menu(view,pos))
+        for sequence,callback in [('Alt+Left',lambda:panel.travel(-1)),('Alt+Right',lambda:panel.travel(1)),('Alt+Up',self.up),('Alt+D',self.address),('Ctrl+L',self.address),('Ctrl+F',self.search)]:
             shortcut=QShortcut(QKeySequence(sequence),panel);shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut);shortcut.activated.connect(callback)
         panel.view.viewport().installEventFilter(self)
     def eventFilter(self,obj,event):
+        if obj in (self.tree.viewport(),self.quick.viewport()) and event.type() in (QEvent.Type.MouseButtonPress,QEvent.Type.MouseButtonRelease) and event.button()==Qt.MouseButton.RightButton:return True
         if event.type()==QEvent.Type.MouseButtonRelease:
             if event.button()==Qt.MouseButton.BackButton:self.panel.travel(-1);return True
             if event.button()==Qt.MouseButton.ForwardButton:self.panel.travel(1);return True
         return super().eventFilter(obj,event)
+    def build_context_menu(self,view,index):
+        shell_actions.select_for_context(view,index)
+        path=(self.fs.filePath(index) if view is self.tree else index.data(Qt.ItemDataRole.UserRole)) if index.isValid() else ''
+        return self.panel.build_folder_menu(path)
+    def show_context_menu(self,view,pos):
+        menu=self.build_context_menu(view,view.indexAt(pos))
+        try:menu.exec(view.viewport().mapToGlobal(pos))
+        finally:menu.deleteLater()
     def address(self):self.panel.address.setFocus();self.panel.address.selectAll()
     def search(self):self.panel.search.setFocus();self.panel.search.selectAll()
     def up(self):

@@ -2,15 +2,16 @@
 import os,io,hashlib,time
 from pathlib import Path
 from collections import OrderedDict
-from PySide6.QtCore import Qt,QAbstractListModel,QModelIndex,QSize,QSortFilterProxyModel,QTimer
-from PySide6.QtGui import QPixmap,QIcon,QColor
-from PySide6.QtWidgets import (QWidget,QVBoxLayout,QLineEdit,QComboBox,QLabel,QListView,QAbstractItemView,QSplitter,QPlainTextEdit,QFileDialog,QSlider,QTabWidget,QStyle)
+from PySide6.QtCore import Qt,QAbstractListModel,QModelIndex,QSize,QSortFilterProxyModel,QTimer,QItemSelectionModel
+from PySide6.QtGui import QPixmap,QIcon,QColor,QAction,QKeySequence
+from PySide6.QtWidgets import (QWidget,QVBoxLayout,QLineEdit,QComboBox,QLabel,QListView,QAbstractItemView,QSplitter,QPlainTextEdit,QFileDialog,QSlider,QTabWidget,QStyle,QMenu)
 from .core import EXTENSIONS,load_image,inspect_image,json_text,file_stamp
 from .workspace import line,action,bar
 from .appearance import CANVAS,caption
 from .prompt_highlight import PromptEdit
 from .cards import caption_height
 from .explorer_navigation import ExplorerView,NavigationPane
+from . import shell_actions
 
 
 def scan_folder(folder,cancelled=lambda:False):
@@ -72,7 +73,7 @@ class DiskBrowser(QWidget):
         self.favorites=QComboBox();self.favorites.setMinimumContentsLength(12);self.favorites.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon);self.favorites.setMaximumWidth(240);self.refresh_favorites();self.favorites.activated.connect(lambda i:self.navigate(self.favorites.itemData(i)) if i else None)
         self.search=QLineEdit();self.search.setPlaceholderText('현재 폴더의 이름 검색 · 하위 폴더 제외');self.sort=QComboBox();self.sort.addItems(['이름 ↑','이름 ↓','수정일 ↑','수정일 ↓','크기 ↑','크기 ↓'])
         self.add=action('선택 이미지를 라이브러리에 추가',self.add_selected);self.add.setProperty('primary',True);self.add.setEnabled(False)
-        layout.addWidget(line(self.favorites,action('☆ 경로 저장 / 해제',self.toggle_favorite),self.search,self.sort,self.add))
+        layout.addWidget(line(self.favorites,action('☆ 경로 저장 / 해제',lambda:self.toggle_favorite()),self.search,self.sort,self.add))
         self.split=QSplitter();layout.addWidget(self.split,1)
         self.view=ExplorerView(self);self.view.setViewMode(QListView.ViewMode.IconMode);self.view.setMovement(QListView.Movement.Static);self.view.setResizeMode(QListView.ResizeMode.Adjust);self.view.setUniformItemSizes(True);self.view.setLayoutMode(QListView.LayoutMode.Batched);self.view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection);self.view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.model=DiskModel(self);self.proxy=DiskProxy(self);self.proxy.setSourceModel(self.model);self.view.setModel(self.proxy);self.navigation=NavigationPane(self);self.split.addWidget(self.navigation);self.split.addWidget(self.view)
@@ -91,7 +92,11 @@ class DiskBrowser(QWidget):
         self.view.doubleClicked.connect(self.activate);self.view.selectionModel().currentChanged.connect(self.selection_changed);self.view.selectionModel().selectionChanged.connect(self.selection_count)
         self.timer=QTimer(self);self.timer.setInterval(70);self.timer.timeout.connect(self.start_thumbnails)
         self.preview_timer=QTimer(self);self.preview_timer.setSingleShot(True);self.preview_timer.setInterval(120);self.preview_timer.timeout.connect(self.start_preview)
-        self.update_navigation()
+        self.refresh_action=QAction('새로 고침',self);self.select_all_action=QAction('모두 선택',self);self.copy_paths_action=QAction('경로 복사',self)
+        for item,sequence,callback in [(self.refresh_action,'F5',lambda:self.open_folder(self.folder,refresh=True)),(self.select_all_action,'Ctrl+A',self.view.selectAll),(self.copy_paths_action,'Ctrl+Shift+C',self.copy_selection)]:
+            item.setShortcut(QKeySequence(sequence));item.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut);item.triggered.connect(callback);self.addAction(item)
+        self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu);self.view.customContextMenuRequested.connect(self.show_context_menu)
+        self.update_navigation();self.selection_count()
     def set_active(self,on):
         self.active=on
         if on:
@@ -131,17 +136,82 @@ class DiskBrowser(QWidget):
     def travel(self,step):
         n=self.history_at+step
         if 0<=n<len(self.history):self.navigate(self.history[n],history_at=n)
-    def update_navigation(self):self.back.setEnabled(self.history_at>0);self.forward.setEnabled(self.history_at+1<len(self.history))
+    def update_navigation(self):self.back.setEnabled(self.history_at>0);self.forward.setEnabled(self.history_at+1<len(self.history));self.refresh_action.setEnabled(bool(self.folder))
     def refresh_favorites(self):
         if hasattr(self,'navigation'):self.navigation.refresh_quick()
         self.favorites.clear();self.favorites.addItem('즐겨찾는 경로',None)
         for path in self.state.get('favorites',[]):self.favorites.addItem(path,path)
-    def toggle_favorite(self):
-        if not self.folder:return
+    def toggle_favorite(self,path=None):
+        if path is None:path=self.folder
+        if not path:return False
+        path=str(Path(path))
+        if not self.paths_exist([path]):return False
         paths=list(self.state.get('favorites',[]))
-        if self.folder in paths:paths.remove(self.folder)
-        else:paths.append(self.folder)
-        self.state['favorites']=paths;self.refresh_favorites();self.save()
+        if path in paths:paths.remove(path)
+        else:paths.append(path)
+        self.state['favorites']=paths;self.refresh_favorites();self.save();return True
+    def paths_exist(self,paths):
+        for path in paths:
+            if not Path(path).exists():self.owner.statusBar().showMessage('파일을 찾을 수 없습니다: '+Path(path).name);return False
+        return True
+    def open_folder(self,path,refresh=False):
+        if not path or not self.paths_exist([path]):return False
+        if refresh:self.navigate(path,refresh=True)
+        else:self.navigate(path)
+        return True
+    def shell_open(self,path,default=False):
+        if not path:return False
+        result=shell_actions.open_default(path) if default else shell_actions.reveal_in_explorer(path)
+        if not result:self.owner.statusBar().showMessage('파일을 찾을 수 없습니다: '+Path(path).name)
+        return result
+    def copy_references(self,paths,names=False):
+        if not self.paths_exist(paths):return False
+        count=shell_actions.copy_paths(paths,names=names)
+        if count:self.owner.statusBar().showMessage(f'{"파일 이름" if names else "경로"} {count}개를 복사했습니다.')
+        return count
+    def selected_rows(self):return [self.proxy.data(i,Qt.ItemDataRole.UserRole) for i in self.view.selectedIndexes()]
+    def copy_selection(self,names=False):
+        paths=[row[0] for row in self.selected_rows()]
+        if not paths and self.folder:paths=[self.folder]
+        return self.copy_references(paths,names)
+    def save_selected_prompt(self):
+        rows=self.selected_rows()
+        if len(rows)!=1 or rows[0][2] or not self.paths_exist([rows[0][0]]):return False
+        if self.preview_path!=rows[0][0]:self.selection_changed(self.view.selectedIndexes()[0])
+        self.owner.save_image_to_note(True);return True
+    def build_folder_menu(self,path,copy_action=None):
+        path=str(Path(path)) if path else '';menu=QMenu(self);available=bool(path)
+        menu.addAction('열기',lambda:self.open_folder(path)).setEnabled(available)
+        label='즐겨찾는 경로에서 제거' if path in self.state.get('favorites',[]) else '즐겨찾는 경로에 추가'
+        menu.addAction(label,lambda:self.toggle_favorite(path)).setEnabled(available);menu.addSeparator()
+        menu.addAction('탐색기에서 열기',lambda:self.shell_open(path)).setEnabled(available)
+        if copy_action:menu.addAction(copy_action)
+        else:
+            item=menu.addAction('경로 복사',lambda:self.copy_references([path]));item.setEnabled(available);item.setShortcut(QKeySequence('Ctrl+Shift+C'));item.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+        return menu
+    def build_context_menu(self,index):
+        if index.isValid():
+            shell_actions.select_for_context(self.view,index);self.view.selectionModel().setCurrentIndex(index,QItemSelectionModel.SelectionFlag.NoUpdate)
+        else:self.view.selectionModel().clear()
+        row=self.proxy.data(index,Qt.ItemDataRole.UserRole);rows=self.selected_rows();self.copy_paths_action.setEnabled(bool(rows or self.folder))
+        if row and row[2]:return self.build_folder_menu(row[0],self.copy_paths_action)
+        menu=QMenu(self)
+        if row:
+            menu.addAction('라이브러리에 추가',self.add_selected).setEnabled(bool(self.selected_paths()))
+            menu.addAction('프롬프트를 노트에 저장…',self.save_selected_prompt).setEnabled(len(rows)==1 and not rows[0][2]);menu.addSeparator()
+            menu.addAction('기본 앱으로 열기',lambda:self.shell_open(row[0],True)).setEnabled(len(rows)==1)
+            menu.addAction('탐색기에서 위치 열기',lambda:self.shell_open(row[0]));menu.addAction(self.copy_paths_action)
+            menu.addAction('파일 이름 복사',lambda:self.copy_selection(True))
+        else:
+            menu.addAction(self.refresh_action);menu.addAction(self.select_all_action);menu.addSeparator()
+            path=self.folder;menu.addAction('탐색기에서 열기',lambda:self.shell_open(path)).setEnabled(bool(path));menu.addAction(self.copy_paths_action)
+            label='즐겨찾는 경로에서 제거' if path in self.state.get('favorites',[]) else '즐겨찾는 경로에 추가'
+            menu.addAction(label,lambda:self.toggle_favorite(path)).setEnabled(bool(path))
+        return menu
+    def show_context_menu(self,pos):
+        menu=self.build_context_menu(self.view.indexAt(pos))
+        try:menu.exec(self.view.viewport().mapToGlobal(pos))
+        finally:menu.deleteLater()
     def filter_changed(self,*args):self.proxy.invalidate();self.proxy.sort(0);self.selection_count()
     def resize_icons(self,*args):
         anchor=self.view.currentIndex()
@@ -149,13 +219,17 @@ class DiskBrowser(QWidget):
         n=self.size.value();self.view.setIconSize(QSize(n,n));self.view.setGridSize(QSize(n+36,n+16+caption_height(self.view.fontMetrics())));self.view.doItemsLayout()
         if anchor.isValid():self.view.scrollTo(anchor)
     def selected_paths(self):return [self.proxy.data(i,Qt.ItemDataRole.UserRole)[0] for i in self.view.selectedIndexes() if not self.proxy.data(i,Qt.ItemDataRole.UserRole)[2]]
-    def selection_count(self,*args):self.add.setEnabled(bool(self.selected_paths()))
+    def selection_count(self,*args):
+        self.add.setEnabled(bool(self.selected_paths()))
+        if hasattr(self,'copy_paths_action'):self.copy_paths_action.setEnabled(bool(self.view.selectedIndexes() or self.folder))
     def add_selected(self):
         paths=self.selected_paths()
-        if paths:self.owner.add_paths(paths,open_first=False);self.status.setText(f'{len(paths)}개 이미지를 라이브러리에 추가했습니다. 원본 위치는 유지됩니다.')
+        if not paths or not self.paths_exist(paths):return False
+        self.owner.add_paths(paths,open_first=False);self.status.setText(f'{len(paths)}개 이미지를 라이브러리에 추가했습니다. 원본 위치는 유지됩니다.');return True
     def activate(self,index):
         row=self.proxy.data(index,Qt.ItemDataRole.UserRole)
-        if row and row[2]:self.navigate(row[0])
+        if row and row[2]:return self.open_folder(row[0])
+        return False
     def selection_changed(self,index,*args):
         self.preview_generation+=1;self.preview_timer.stop();self.preview_path=None;self.viewer.display(None);self.metadata.clear();self.positive.clear();self.negative.clear()
         if not index.isValid():return
