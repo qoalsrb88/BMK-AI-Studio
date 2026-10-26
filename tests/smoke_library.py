@@ -158,6 +158,9 @@ def context_checks(paged):
         load.reset_mock();QTest.keyClick(library,Qt.Key.Key_Return);assert load.called
     menu,items=context(0);items['목록에서 제거 · 원본 유지'].trigger();assert library.count()==3
     window.undo_library_removal();wait(window);assert library.count()==4
+    select(next(r for r in range(library.proxy.rowCount()) if library.proxy.index(r,0).data(Qt.ItemDataRole.UserRole)!=str(missing)))
+    library.setFocus();QTest.keyClick(library,Qt.Key.Key_Delete,Qt.KeyboardModifier.KeypadModifier);assert library.count()==3 and len(window.removal_history)==1
+    window.undo_library_removal();wait(window);assert library.count()==4
     select();library.setFocus();QTest.keyClick(library,Qt.Key.Key_Delete);assert not window.removal_history
     assert all(fingerprint(source)==digest for source,digest in hashes.items())
     window.close();app.processEvents()

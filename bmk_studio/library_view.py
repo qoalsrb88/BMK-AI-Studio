@@ -137,7 +137,8 @@ class LibraryView(QListView):
     def resizeEvent(self,event):
         self.hide_remove();super().resizeEvent(event)
     def keyPressEvent(self,event):
-        if self.hasFocus() and event.modifiers()==Qt.KeyboardModifier.NoModifier and event.key()==Qt.Key.Key_Delete:
+        # The keypad Del arrives with KeypadModifier; only user-held modifiers disable removal.
+        if self.hasFocus() and event.modifiers()&~Qt.KeyboardModifier.KeypadModifier==Qt.KeyboardModifier.NoModifier and event.key()==Qt.Key.Key_Delete:
             self.removeSelectionRequested.emit();event.accept();return
         super().keyPressEvent(event)
         if event.modifiers()==Qt.KeyboardModifier.NoModifier and event.key() in (Qt.Key.Key_Left,Qt.Key.Key_Right,Qt.Key.Key_Up,Qt.Key.Key_Down,Qt.Key.Key_Return):
