@@ -121,7 +121,7 @@ wait(lambda:tree_index.isValid() and not nav.tree.visualRect(tree_index).isEmpty
 for view,idx,path in [(nav.tree,tree_index,str(folder/'child')),(nav.quick,nav.quick.model().index(0,0),str(root))]:
     clicked=[];view.clicked.connect(clicked.append)
     with patch.object(d,'navigate') as navigate:
-        items=popup(view,idx);assert labels(items)==folder_labels and not clicked and items[-1][2]=='Ctrl+Shift+C';navigate.assert_not_called()
+        items=popup(view,idx);assert labels(items)==folder_labels and not clicked and items[-1][2]=='';navigate.assert_not_called()
         popup(view,idx,'열기');navigate.assert_called_once_with(path)
     popup(view,idx,'경로 복사');assert app.clipboard().text()==path
     popup(view,idx,'탐색기에서 열기');reveal.assert_called_with(path)
@@ -162,6 +162,16 @@ for default,mock in [(False,reveal),(True,open_default)]:
 with patch.object(d,'navigate') as navigate:
     assert d.open_folder(str(root/'missing')) is False and d.toggle_favorite(str(root/'missing')) is False;navigate.assert_not_called()
 assert w.statusBar().currentMessage()=='파일을 찾을 수 없습니다: missing'
+# Stale favorites stay removable, matching ignores case, and drive roots keep a readable name.
+stale=root/'stale';stale.mkdir();assert d.toggle_favorite(str(stale)) and d.toggle_favorite(str(stale).upper()) and str(stale) not in d.state['favorites']
+d.toggle_favorite(str(stale));stale.rmdir();assert d.toggle_favorite(str(stale)) and str(stale) not in d.state['favorites'] and favorite_present(str(stale))==(False,False)
+d.paths_exist(['Q:\\']);assert w.statusBar().currentMessage()=='파일을 찾을 수 없습니다: Q:\\'
+# Ctrl+A in read-only preview text selects that text, not the thumbnails.
+d.view.clearSelection();d.metadata.setPlainText('line one\nline two');d.info_tabs.setCurrentIndex(2);app.processEvents();d.metadata.setFocus();app.processEvents()
+QTest.keyClick(d.metadata,Qt.Key.Key_A,Qt.KeyboardModifier.ControlModifier);assert d.metadata.textCursor().hasSelection() and not d.view.selectedIndexes()
+d.view.setFocus();app.processEvents();QTest.keyClick(d.view,Qt.Key.Key_A,Qt.KeyboardModifier.ControlModifier);assert len(d.view.selectedIndexes())==d.proxy.rowCount()>0
+# A modifier-free key resets Qt's remembered Ctrl state before later selection checks.
+QTest.keyClick(d.view,Qt.Key.Key_Escape);d.view.clearSelection()
 d.navigate(d.folder,refresh=True);wait(lambda:not d.scan_job);assert select_context.call_count>0
 d.activate(index('child'));wait(lambda:d.folder==str(folder/'child') and not d.scan_job);assert len(d.model.rows)==1
 d.back.click();wait(lambda:d.folder==str(folder) and not d.scan_job);d.forward.click();wait(lambda:d.folder==str(folder/'child') and not d.scan_job)

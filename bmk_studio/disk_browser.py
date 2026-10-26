@@ -93,8 +93,9 @@ class DiskBrowser(QWidget):
         self.timer=QTimer(self);self.timer.setInterval(70);self.timer.timeout.connect(self.start_thumbnails)
         self.preview_timer=QTimer(self);self.preview_timer.setSingleShot(True);self.preview_timer.setInterval(120);self.preview_timer.timeout.connect(self.start_preview)
         self.refresh_action=QAction('새로 고침',self);self.select_all_action=QAction('모두 선택',self);self.copy_paths_action=QAction('경로 복사',self)
-        for item,sequence,callback in [(self.refresh_action,'F5',lambda:self.open_folder(self.folder,refresh=True)),(self.select_all_action,'Ctrl+A',self.view.selectAll),(self.copy_paths_action,'Ctrl+Shift+C',self.copy_selection)]:
-            item.setShortcut(QKeySequence(sequence));item.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut);item.triggered.connect(callback);self.addAction(item)
+        # Ctrl+A belongs to the thumbnails only, so read-only preview text keeps its own select-all.
+        for item,sequence,callback,scope in [(self.refresh_action,'F5',lambda:self.open_folder(self.folder,refresh=True),self),(self.select_all_action,'Ctrl+A',self.view.selectAll,self.view),(self.copy_paths_action,'Ctrl+Shift+C',self.copy_selection,self)]:
+            item.setShortcut(QKeySequence(sequence));item.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut);item.triggered.connect(callback);scope.addAction(item)
         self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu);self.view.customContextMenuRequested.connect(self.show_context_menu)
         self.update_navigation();self.selection_count()
     def set_active(self,on):
@@ -141,18 +142,22 @@ class DiskBrowser(QWidget):
         if hasattr(self,'navigation'):self.navigation.refresh_quick()
         self.favorites.clear();self.favorites.addItem('즐겨찾는 경로',None)
         for path in self.state.get('favorites',[]):self.favorites.addItem(path,path)
+    def favorite_entry(self,path):
+        key=os.path.normcase(os.path.normpath(path)) if path else None
+        return next((p for p in self.state.get('favorites',[]) if os.path.normcase(os.path.normpath(p))==key),None) if key else None
     def toggle_favorite(self,path=None):
         if path is None:path=self.folder
         if not path:return False
-        path=str(Path(path))
-        if not self.paths_exist([path]):return False
-        paths=list(self.state.get('favorites',[]))
-        if path in paths:paths.remove(path)
-        else:paths.append(path)
+        path=str(Path(path));paths=list(self.state.get('favorites',[]));stored=self.favorite_entry(path)
+        # Removal must still work after a drive or folder disappears; only new entries need to exist.
+        if stored is not None:paths.remove(stored)
+        elif self.paths_exist([path]):paths.append(path)
+        else:return False
         self.state['favorites']=paths;self.refresh_favorites();self.save();return True
+    def report_missing(self,path):self.owner.statusBar().showMessage('파일을 찾을 수 없습니다: '+(Path(path).name or str(Path(path))))
     def paths_exist(self,paths):
         for path in paths:
-            if not Path(path).exists():self.owner.statusBar().showMessage('파일을 찾을 수 없습니다: '+Path(path).name);return False
+            if not Path(path).exists():self.report_missing(path);return False
         return True
     def open_folder(self,path,refresh=False):
         if not path or not self.paths_exist([path]):return False
@@ -162,7 +167,7 @@ class DiskBrowser(QWidget):
     def shell_open(self,path,default=False):
         if not path:return False
         result=shell_actions.open_default(path) if default else shell_actions.reveal_in_explorer(path)
-        if not result:self.owner.statusBar().showMessage('파일을 찾을 수 없습니다: '+Path(path).name)
+        if not result:self.report_missing(path)
         return result
     def copy_references(self,paths,names=False):
         if not self.paths_exist(paths):return False
@@ -182,12 +187,12 @@ class DiskBrowser(QWidget):
     def build_folder_menu(self,path,copy_action=None):
         path=str(Path(path)) if path else '';menu=QMenu(self);available=bool(path)
         menu.addAction('열기',lambda:self.open_folder(path)).setEnabled(available)
-        label='즐겨찾는 경로에서 제거' if path in self.state.get('favorites',[]) else '즐겨찾는 경로에 추가'
+        label='즐겨찾는 경로에서 제거' if self.favorite_entry(path) is not None else '즐겨찾는 경로에 추가'
         menu.addAction(label,lambda:self.toggle_favorite(path)).setEnabled(available);menu.addSeparator()
         menu.addAction('탐색기에서 열기',lambda:self.shell_open(path)).setEnabled(available)
+        # Tree and quick-place menus copy the clicked folder, so they do not advertise the panel's Ctrl+Shift+C.
         if copy_action:menu.addAction(copy_action)
-        else:
-            item=menu.addAction('경로 복사',lambda:self.copy_references([path]));item.setEnabled(available);item.setShortcut(QKeySequence('Ctrl+Shift+C'));item.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+        else:menu.addAction('경로 복사',lambda:self.copy_references([path])).setEnabled(available)
         return menu
     def build_context_menu(self,index):
         if index.isValid():
@@ -205,7 +210,7 @@ class DiskBrowser(QWidget):
         else:
             menu.addAction(self.refresh_action);menu.addAction(self.select_all_action);menu.addSeparator()
             path=self.folder;menu.addAction('탐색기에서 열기',lambda:self.shell_open(path)).setEnabled(bool(path));menu.addAction(self.copy_paths_action)
-            label='즐겨찾는 경로에서 제거' if path in self.state.get('favorites',[]) else '즐겨찾는 경로에 추가'
+            label='즐겨찾는 경로에서 제거' if self.favorite_entry(path) is not None else '즐겨찾는 경로에 추가'
             menu.addAction(label,lambda:self.toggle_favorite(path)).setEnabled(bool(path))
         return menu
     def show_context_menu(self,pos):
