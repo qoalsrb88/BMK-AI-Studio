@@ -299,6 +299,11 @@ w.note_tabs.tabBarDoubleClicked.emit(w.preview_index());assert w.preview_index()
 w.open_note(tree_item(ids[22]));w.notes.itemActivated.emit(tree_item(ids[22]),0);assert w.preview_index() is None
 w.open_note(tree_item(ids[23]));menu=w.make_note_tree_menu(tree_item(ids[23]));menu.actions()[0].trigger();menu.deleteLater();assert w.preview_index() is None
 count=w.note_tabs.count();w.open_note(tree_item(ids[15]));assert w.note_tabs.count()==count and w.note_id==ids[15] and w.preview_index() is None
+# Renaming a previewed note from the list while another tab is current keeps it in its own tab.
+w.open_note(tree_item(ids[25]));p=w.preview_index();w.note_tabs.setCurrentIndex(1);w.notes.setCurrentItem(tree_item(ids[25]))
+with patch('bmk_studio.app.QInputDialog.getText',return_value=('view 25 renamed',True)):w.rename_tree_note()
+assert w.preview_index() is None and w.note_tabs.tabText(p)=='view 25 renamed'
+w.open_note(tree_item(ids[26]));assert w.note_tabs.tabData(p)['id']==ids[25] and w.note_tabs.tabData(w.preview_index())['id']==ids[26]
 # Switching to the preview tab does not keep it; restart restores it as a preview.
 w.open_note(tree_item(ids[24]));p=w.preview_index();w.note_tabs.setCurrentIndex(1);w.note_tabs.setCurrentIndex(p);assert w.preview_index()==p and w.note_id==ids[24]
 close_window();w=Studio(root/'viewing');w.show();app.processEvents()

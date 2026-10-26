@@ -883,7 +883,8 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         if self.note_mode and self.note_id==nid:self.note_title.setText(title);self.save_draft()
         else:self.store.save_note(title,json.loads(record[2]),nid,record[3])
         for i in range(1,self.note_tabs.count()):
-            if self.note_tabs.tabData(i).get('id')==nid:self.note_tabs.setTabText(i,title)
+            # Renaming is an edit, so a previewed note keeps its tab like any other change.
+            if self.note_tabs.tabData(i).get('id')==nid:self.note_tabs.setTabText(i,title);self.promote_preview(i)
         self.refresh_notes()
     def duplicate_tree_note(self,nid):
         self.save_draft();record=self.store.note(nid)
