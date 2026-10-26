@@ -325,6 +325,24 @@ assert w.store.state('appearance')['note_tab_limit']==2 and w.note_tabs.count()-
 w.appearance['note_tab_limit']=0
 for nid in ids[40:44]:w.open_note_id(nid)
 assert w.note_tabs.count()-1==6
+# Keyboard browsing: arrows preview like clicks in one tab, held-down keys settle on the last note, Enter keeps it.
+# The settings dialog left the window inactive; browsing assumes the user is focused in the list.
+w.refresh_notes();start=tree_item(ids[50]);w.notes.setCurrentItem(start);w.activateWindow();w.notes.setFocus();app.processEvents();assert w.note_id!=ids[50] and w.notes.hasFocus()
+tabs=w.note_tabs.count();QTest.keyClick(w.notes,Qt.Key.Key_Down);QTest.qWait(200)
+first=w.notes.currentItem().data(0,Qt.ItemDataRole.UserRole);p=w.preview_index()
+assert first and w.note_id==first and p is not None and w.note_tabs.tabData(p)['id']==first and w.note_tabs.count()==tabs+1 and w.notes.hasFocus()
+for _ in range(3):QTest.keyClick(w.notes,Qt.Key.Key_Down)
+QTest.qWait(200);last=w.notes.currentItem().data(0,Qt.ItemDataRole.UserRole)
+assert last!=first and w.note_id==last and w.note_tabs.tabData(w.preview_index())['id']==last and w.note_tabs.count()==tabs+1
+bodies={nid:w.store.note(nid)[2] for nid in ids};history={nid:len(w.store.revisions(nid)) for nid in ids}
+QTest.keyClick(w.notes,Qt.Key.Key_Up);QTest.qWait(200);assert all(w.store.note(nid)[2]==bodies[nid] and len(w.store.revisions(nid))==history[nid] for nid in ids)
+QTest.keyClick(w.notes,Qt.Key.Key_Return);app.processEvents();kept=w.note_id
+assert w.preview_index() is None and kept==w.notes.currentItem().data(0,Qt.ItemDataRole.UserRole) and w.notes.hasFocus()
+# Moving onto a folder or pressing a key that does not move keeps the open note.
+folder=tree_item(folder='/Imported');w.notes.setCurrentItem(folder.child(0));app.processEvents();QTest.keyClick(w.notes,Qt.Key.Key_Up);QTest.qWait(200)
+assert w.notes.currentItem() is folder and w.note_id==kept
+with patch('bmk_studio.app.QInputDialog.getText',return_value=('',False)):QTest.keyClick(w.notes,Qt.Key.Key_F2);QTest.qWait(200)
+assert w.note_id==kept
 w.confirm_image_change=lambda:True
 close_window();guards.close()
-print('PASS: note tab menus, reorder/autosave/restart, reopen stack, middle close, editor shortcuts, tree menus, rename/duplicate/history preservation and persistent folder collapse; viewing without rewrites, preview tab and tab limit; temporary artifacts:',root)
+print('PASS: note tab menus, reorder/autosave/restart, reopen stack, middle close, editor shortcuts, tree menus, rename/duplicate/history preservation and persistent folder collapse; viewing without rewrites, preview tab, keyboard browsing and tab limit; temporary artifacts:',root)

@@ -400,6 +400,8 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         nl.addWidget(caption('프롬프트 노트','section'))
         self.note_search=QLineEdit();self.note_search.setPlaceholderText('노트만 검색');self.note_search.textChanged.connect(self.refresh_notes);nl.addWidget(self.note_search)
         self.notes = QTreeWidget();self.notes.setHeaderHidden(True); self.notes.itemClicked.connect(self.open_note); self.notes.itemActivated.connect(self.keep_note); nl.addWidget(self.notes,2)
+        # Arrow keys browse like clicks; a short delay skips the notes passed while a key is held down.
+        self.notes.installEventFilter(self);self.note_preview_timer=QTimer(self);self.note_preview_timer.setSingleShot(True);self.note_preview_timer.setInterval(80);self.note_preview_timer.timeout.connect(self.preview_tree_current)
         self.notes.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu);self.notes.customContextMenuRequested.connect(self.note_tree_context_menu)
         self.notes.itemCollapsed.connect(self.save_note_tree);self.notes.itemExpanded.connect(self.save_note_tree)
         self.rename_note_action=QAction('이름 바꾸기…',self.notes);self.rename_note_action.setShortcut(QKeySequence('F2'));self.rename_note_action.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
@@ -1030,9 +1032,18 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
             self.open_note_id(nid)
         self.update_note_shortcuts()
     def eventFilter(self,watched,event):
-        if watched is self.note_tabs and event.type()==QEvent.Type.MouseButtonRelease and event.button()==Qt.MouseButton.MiddleButton:
+        # The note list gets its filter before the tab bar exists, so both lookups tolerate a missing widget.
+        if watched is getattr(self,'note_tabs',None) and event.type()==QEvent.Type.MouseButtonRelease and event.button()==Qt.MouseButton.MiddleButton:
             self.close_document(self.note_tabs.tabAt(event.position().toPoint()));return True
+        if watched is getattr(self,'notes',None) and event.type()==QEvent.Type.KeyPress and event.key() not in (Qt.Key.Key_Return,Qt.Key.Key_Enter):
+            # The tree moves after this filter returns; Enter keeps the note through itemActivated.
+            before=self.notes.currentItem();QTimer.singleShot(0,lambda:self.after_tree_key(before))
         return super().eventFilter(watched,event)
+    def after_tree_key(self,before):
+        if self.notes.currentItem() is not before:self.note_preview_timer.start()
+    def preview_tree_current(self):
+        item=self.notes.currentItem();nid=item.data(0,Qt.ItemDataRole.UserRole) if item else None
+        if nid and nid!=self.note_id and not self.closing_requested:self.open_note_id(nid,preview=True)
     def note_tab_moved(self,source,target):
         order=list(range(self.note_tabs.count()));order.insert(target,order.pop(source))
         image=next(i for i in range(self.note_tabs.count()) if (self.note_tabs.tabData(i) or {}).get('image'))
