@@ -2,11 +2,13 @@
 import json
 from pathlib import Path
 from PySide6.QtCore import Qt,QTimer
+from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QComboBox,QLabel,QPushButton,
     QLineEdit,QCheckBox,QInputDialog,QMenu,QListView,QDialog,QListWidget,QListWidgetItem,QPlainTextEdit,QDialogButtonBox)
 from .organize import set_favorites,set_rating
 from .section import Section
 from .chips import ChipRow
+from . import shell_actions
 
 def line(*widgets):
     host=QWidget();layout=QHBoxLayout(host);layout.setContentsMargins(0,0,0,0)
@@ -170,8 +172,17 @@ class WorkspaceMixin:
     def selection_paths(self):return [item.path for item in self.library.selectedItems()]
 
     def selection_menu(self):
+        menu=self.build_selection_menu()
+        if menu is None:return
+        try:menu.exec(self.cursor().pos())
+        finally:menu.deleteLater()
+
+    def build_selection_menu(self,context_path=None):
         paths=self.selection_paths()
         if not paths:return
+        if context_path is None:
+            current=self.library.currentIndex().data(Qt.ItemDataRole.UserRole)
+            context_path=current if current in paths else paths[0]
         menu=QMenu(self)
         menu.addAction('즐겨찾기 추가',lambda:self.mark_favorite(True));menu.addAction('즐겨찾기 해제 (별점도 해제)',lambda:self.mark_favorite(False))
         ratings=menu.addMenu('개인 별점 · 모델 rating과 별개')
@@ -179,8 +190,39 @@ class WorkspaceMixin:
         collections=menu.addMenu('컬렉션에 추가')
         for name, in self.store.db.execute('SELECT name FROM collections ORDER BY name'):collections.addAction(name,lambda checked=False,value=name:self.assign_collection(value,True))
         if not collections.actions():collections.addAction('왼쪽에서 컬렉션을 먼저 만드세요').setEnabled(False)
-        menu.addSeparator();menu.addAction('태깅 대기열에 추가',self.enqueue_selected);menu.addAction('목록에서 제거 · 원본 유지',self.remove_library_selection)
-        menu.exec(self.cursor().pos())
+        menu.addSeparator();menu.addAction('태깅 대기열에 추가',self.enqueue_selected)
+        remove=menu.addAction('목록에서 제거 · 원본 유지',self.remove_library_selection);remove.setShortcut(QKeySequence('Del'));remove.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+        menu.addSeparator();exists=Path(context_path).is_file()
+        menu.addAction('기본 앱으로 열기',lambda:self.open_library_external(paths[0],shell_actions.open_default)).setEnabled(len(paths)==1 and Path(paths[0]).is_file())
+        menu.addAction('탐색기에서 위치 열기',lambda:self.open_library_external(context_path,shell_actions.reveal_in_explorer)).setEnabled(exists)
+        menu.addAction('파일 탐색에서 이 폴더 열기',lambda:self.open_library_folder(context_path)).setEnabled(exists)
+        menu.addAction('경로 복사',lambda:self.copy_library_paths(paths));menu.addAction('파일 이름 복사',lambda:self.copy_library_paths(paths,True))
+        return menu
+
+    def build_library_background_menu(self):
+        menu=QMenu(self);select=menu.addAction('모두 선택',self.library.selectAll);select.setShortcut(QKeySequence('Ctrl+A'));select.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+        select.setEnabled(self.library.proxy.rowCount()>0)
+        menu.addAction('목록 제거 되돌리기',self.undo_library_removal).setEnabled(bool(self.removal_history))
+        return menu
+
+    def library_context_menu(self,position):
+        index=self.library.indexAt(position)
+        if index.isValid():
+            shell_actions.select_for_context(self.library,index);menu=self.build_selection_menu(index.data(Qt.ItemDataRole.UserRole))
+        else:menu=self.build_library_background_menu()
+        if menu is None:return
+        try:menu.exec(self.library.viewport().mapToGlobal(position))
+        finally:menu.deleteLater()
+
+    def open_library_external(self,path,callback):
+        if not callback(path):self.statusBar().showMessage('파일을 찾을 수 없습니다: '+Path(path).name,5000)
+
+    def open_library_folder(self,path):
+        if not Path(path).is_file():self.statusBar().showMessage('파일을 찾을 수 없습니다: '+Path(path).name,5000);return
+        self.main_tabs.setCurrentIndex(0);self.disk_browser.navigate(str(Path(path).parent))
+
+    def copy_library_paths(self,paths,names=False):
+        count=shell_actions.copy_paths(paths,names=names);self.statusBar().showMessage(f'{"파일 이름" if names else "경로"} {count}개를 복사했습니다.',4000)
 
     def mark_favorite(self,on):
         paths=self.selection_paths();set_favorites(self.store.db,paths,on);self.refresh_favorite_badges();self.library.refresh_query();self.update_workspace_status()
@@ -252,6 +294,8 @@ class WorkspaceMixin:
         QTimer.singleShot(0,restore)
 
     def initialize_workspace(self):
+        self.library.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu);self.library.customContextMenuRequested.connect(self.library_context_menu)
+        self.library.removeSelectionRequested.connect(self.remove_library_selection)
         state=self.store.state('browser_workspace') or {};self.workspace_positions=state.get('positions',{});self.workspace_sizes=state.get('sizes',{})
         self.refresh_favorite_badges()
         self.set_browser_state(state);self.note_search.setText(state.get('note_query',''))

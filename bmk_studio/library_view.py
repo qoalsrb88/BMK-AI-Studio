@@ -82,6 +82,7 @@ class SearchProxy(QSortFilterProxyModel):
 class LibraryView(QListView):
     itemClicked=Signal(object)
     removeRequested=Signal(str)
+    removeSelectionRequested=Signal()
     searching=Signal(bool)
     def __init__(self,database=None,owner=None):
         super().__init__();self.records=LibraryModel(self);self.proxy=SearchProxy(self)
@@ -136,6 +137,8 @@ class LibraryView(QListView):
     def resizeEvent(self,event):
         self.hide_remove();super().resizeEvent(event)
     def keyPressEvent(self,event):
+        if self.hasFocus() and event.modifiers()==Qt.KeyboardModifier.NoModifier and event.key()==Qt.Key.Key_Delete:
+            self.removeSelectionRequested.emit();event.accept();return
         super().keyPressEvent(event)
         if event.modifiers()==Qt.KeyboardModifier.NoModifier and event.key() in (Qt.Key.Key_Left,Qt.Key.Key_Right,Qt.Key.Key_Up,Qt.Key.Key_Down,Qt.Key.Key_Return):
             index=self.currentIndex()
