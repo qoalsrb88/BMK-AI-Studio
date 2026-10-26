@@ -24,6 +24,17 @@ class MainTabsMixin:
             doc=editor.document();doc.setParent(self);values.append((doc,editor.textCursor().position(),editor.verticalScrollBar().value()))
             replacement=QTextDocument(editor);replacement.setDocumentLayout(QPlainTextDocumentLayout(replacement));editor.blockSignals(True);editor.setDocument(replacement);editor.blockSignals(False)
         self.editor_contexts[key]=values
+    def remap_note_contexts(self,indices):
+        self.last_note_index=indices.get(self.last_note_index,1)
+        contexts={}
+        for key,values in self.editor_contexts.items():
+            if key[0]=='note' and type(key[1]) is int:
+                if key[1] not in indices:
+                    for doc,_,_ in values:doc.deleteLater()
+                    continue
+                key=('note',indices[key[1]])
+            contexts[key]=values
+        self.editor_contexts=contexts
     def restore_editor_context(self):
         key=('note',self.note_id or self.document_index) if self.note_mode else ('image',str(self.path));values=self.editor_contexts.pop(key,None)
         if not values:return
@@ -53,6 +64,7 @@ class MainTabsMixin:
         (self.note_editor_layout if notes else self.image_work_layout).addWidget(self.prompt_editor);self.prompt_editor.show()
         for widget in self.note_only_controls:widget.setVisible(notes)
         self.work_prompt_header.layout().itemAt(0).widget().setText('노트 프롬프트' if notes else '작업 프롬프트');self.work_negative_header.layout().itemAt(0).widget().setText('노트 네거티브' if notes else '작업 네거티브');self.image_note_save.setVisible(not notes);self.note_tabs.setTabVisible(0,False)
+        self.update_note_shortcuts()
     def workspace_to_main(self,mode):
         if not hasattr(self,'main_tabs'):return
         if mode!='disk':self.last_image_mode=0 if mode=='browse' else 1;self.image_view_modes.blockSignals(True);self.image_view_modes.setCurrentIndex(self.last_image_mode);self.image_view_modes.blockSignals(False)
@@ -60,9 +72,11 @@ class MainTabsMixin:
         self.apply_main_visibility()
     def restore_main_workspace(self):
         state=self.store.state('main_workspace') or {};self.last_note_index=state.get('note_index',1);self.last_image_mode=state.get('image_mode',0)
+        sizes=state.get('notes_split')
+        self.notes_page.setSizes(sizes if isinstance(sizes,list) and len(sizes)==2 and all(type(n) is int and n>0 for n in sizes) else [300,1000])
         self.main_tabs.setCurrentIndex(state.get('tab',2 if self.note_mode else (0 if self.workspace_mode.currentData()=='disk' else 1)));self.change_main_tab(self.main_tabs.currentIndex())
     def save_main_workspace(self):
-        self.store.state('main_workspace',{'tab':self.main_tabs.currentIndex(),'note_index':self.document_index if self.note_mode else self.last_note_index,'image_mode':self.last_image_mode})
+        self.store.state('main_workspace',{'tab':self.main_tabs.currentIndex(),'note_index':self.document_index if self.note_mode else self.last_note_index,'image_mode':self.last_image_mode,'notes_split':self.notes_page.sizes()})
     def save_image_to_note(self,disk=False):
         from .note_transfer import NoteTransferDialog
         self.save_draft()

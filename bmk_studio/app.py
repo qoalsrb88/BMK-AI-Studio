@@ -3,17 +3,19 @@ import json
 import os
 import sys
 import copy
+import base64
 from datetime import datetime
 from pathlib import Path
 from PIL import Image
 from PIL.ImageQt import ImageQt
-from PySide6.QtCore import Qt, QThread, Signal, QMimeData, QUrl, QRectF, QTimer, QSettings, QSize
+from PySide6.QtCore import Qt, QThread, Signal, QMimeData, QUrl, QRectF, QTimer, QSettings, QSize, QEvent, QSignalBlocker
 from PySide6.QtGui import QPixmap, QColor, QPen, QKeySequence, QAction, QActionGroup, QPainter, QDesktopServices, QFontDatabase, QFont, QTextCursor, QIcon, QTextOption
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QSplitter, QLabel, QPushButton, QLineEdit, QPlainTextEdit, QTabWidget, QListWidget,
     QListWidgetItem, QFileDialog, QMessageBox, QComboBox, QDoubleSpinBox, QSpinBox,
     QCheckBox, QGraphicsView, QGraphicsScene, QGraphicsRectItem, QAbstractItemView,
-    QDialog, QDialogButtonBox, QFormLayout, QProgressBar, QTreeWidget, QTreeWidgetItem, QScrollArea, QTabBar, QMenu, QSlider, QStackedWidget, QFrame, QHeaderView)
+    QDialog, QDialogButtonBox, QFormLayout, QProgressBar, QTreeWidget, QTreeWidgetItem, QScrollArea, QTabBar, QMenu, QSlider, QStackedWidget, QFrame, QHeaderView, QInputDialog)
+from . import shell_actions
 from .workspace import WorkspaceMixin, bar
 from .discovery_ui import DiscoveryMixin
 from .appearance import apply_theme, decorate, icon, ghost, caption, tokens, CANVAS, CANVAS_TEXT
@@ -214,6 +216,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.note_extra = {}
         self.note_mode = False
         self.document_index = 0
+        self.closed_note_ids = []
         self.loading = False
         self.history = []
         self.operations = []
@@ -390,6 +393,10 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         nl.addWidget(caption('프롬프트 노트','section'))
         self.note_search=QLineEdit();self.note_search.setPlaceholderText('노트만 검색');self.note_search.textChanged.connect(self.refresh_notes);nl.addWidget(self.note_search)
         self.notes = QTreeWidget();self.notes.setHeaderHidden(True); self.notes.itemClicked.connect(self.open_note); nl.addWidget(self.notes,2)
+        self.notes.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu);self.notes.customContextMenuRequested.connect(self.note_tree_context_menu)
+        self.notes.itemCollapsed.connect(self.save_note_tree);self.notes.itemExpanded.connect(self.save_note_tree)
+        self.rename_note_action=QAction('이름 바꾸기',self.notes);self.rename_note_action.setShortcut(QKeySequence('F2'));self.rename_note_action.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+        self.rename_note_action.triggered.connect(lambda:self.rename_tree_note());self.notes.addAction(self.rename_note_action)
         # Column 1 carries the note count per folder; icons distinguish folders from documents.
         self.notes.setColumnCount(2);self.notes.setIconSize(QSize(16,16));self.notes.header().setStretchLastSection(False)
         self.notes.header().setSectionResizeMode(0,QHeaderView.ResizeMode.Stretch);self.notes.header().setSectionResizeMode(1,QHeaderView.ResizeMode.ResizeToContents)
@@ -436,11 +443,12 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.tabs.addTab(original_page,'원본')
         work=QWidget();self.image_work_layout=QVBoxLayout(work);self.prompt_editor=QWidget();self.image_work_layout.addWidget(self.prompt_editor);wl=QVBoxLayout(self.prompt_editor)
         self.note_tabs=QTabBar();self.note_tabs.setExpanding(False);self.note_tabs.setTabsClosable(True)
-        self.note_tabs.addTab('이미지 작업');self.note_tabs.setTabData(0,{'id':None})
+        self.note_tabs.addTab('이미지 작업');self.note_tabs.setTabData(0,{'id':None,'image':True})
         self.note_tabs.setTabButton(0,QTabBar.ButtonPosition.RightSide,None)
         self.note_tabs.currentChanged.connect(self.activate_document);self.note_tabs.tabCloseRequested.connect(self.close_document)
         self.note_tabs.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.note_tabs.customContextMenuRequested.connect(self.note_tab_context_menu)
+        self.note_tabs.setMovable(True);self.note_tabs.tabMoved.connect(self.note_tab_moved);self.note_tabs.installEventFilter(self)
         wl.addWidget(self.note_tabs)
         self.note_title=QLineEdit(); self.note_title.setPlaceholderText('프로젝트 / 캐릭터 / 노트 이름'); wl.addWidget(self.note_title)
         self.note_category=QComboBox();self.note_category.setEditable(True);self.note_category.setPlaceholderText('카테고리 (예: 캐릭터/의상)');wl.addWidget(self.note_category)
@@ -568,6 +576,12 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.note_category.currentTextChanged.connect(lambda:self.autosave.start() if not self.loading else None)
         for shortcut,fn in [('Ctrl+O',self.open_file),('Ctrl+Shift+V',self.paste),('Ctrl+S',lambda:self.save_note() if self.note_mode else self.save_draft())]:
             action=QAction(self);action.setShortcut(QKeySequence(shortcut));action.triggered.connect(fn);self.addAction(action)
+        self.note_shortcuts={}
+        for shortcut,label,fn in [('Ctrl+N','새 노트',self.new_note),('Ctrl+Shift+T','닫은 탭 다시 열기',self.reopen_note),
+                                 ('Ctrl+W','현재 노트 탭 닫기',lambda:self.close_document(self.note_tabs.currentIndex())),
+                                 ('Ctrl+Tab','다음 노트 탭',lambda:self.cycle_note(1)),('Ctrl+Shift+Tab','이전 노트 탭',lambda:self.cycle_note(-1))]:
+            action=QAction(label,self);action.setShortcut(QKeySequence(shortcut));action.triggered.connect(fn);self.addAction(action);self.note_shortcuts[shortcut]=action
+        self.update_note_shortcuts()
 
     def safe(self,fn):
         try: return fn()
@@ -791,12 +805,8 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.statusBar().showMessage(f'목록 제거를 되돌렸습니다. 현재 검색은 유지됩니다.'+(f' 파일이 없는 {missing}개는 다시 표시할 수 없습니다.' if missing else ''))
     def refresh_notes(self,*args):
         scroll=self.notes.verticalScrollBar().value();selected=self.notes.currentItem();selected_id=selected.data(0,Qt.ItemDataRole.UserRole) if selected else self.note_id
-        expanded={}
-        def remember(parent,prefix=''):
-            for n in range(parent.childCount()):
-                item=parent.child(n);key=prefix+'/'+item.text(0)
-                if not item.data(0,Qt.ItemDataRole.UserRole):expanded[key]=item.isExpanded();remember(item,key)
-        remember(self.notes.invisibleRootItem())
+        collapsed=self.collapsed_note_folders();searching=bool(self.note_search.text())
+        blocker=QSignalBlocker(self.notes)
         self.notes.clear()
         folders={};counts={};folder_icon=icon('folder');note_icon=icon('note')
         for record in self.store.note_entries(self.note_search.text(),self.show_archived.isChecked()):
@@ -805,7 +815,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
             for part in (category.split('/') if category else ['미분류']):
                 path=path+'/'+part
                 if path not in folders:
-                    folder=QTreeWidgetItem([part,'']);folder.setIcon(0,folder_icon);parent.addChild(folder);folders[path]=folder;folder.setExpanded(expanded.get(path,True))
+                    folder=QTreeWidgetItem([part,'']);folder.setIcon(0,folder_icon);folder.setData(0,Qt.ItemDataRole.UserRole+1,path);parent.addChild(folder);folders[path]=folder;folder.setExpanded(searching or path not in collapsed)
                 counts[path]=counts.get(path,0)+1;parent=folders[path]
             item=QTreeWidgetItem([title,'']);item.setIcon(0,note_icon);item.setData(0,Qt.ItemDataRole.UserRole,nid);parent.addChild(item)
             if nid==selected_id:self.notes.setCurrentItem(item)
@@ -813,8 +823,70 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         for path,folder in folders.items():
             folder.setText(1,str(counts.get(path,0)));folder.setForeground(1,muted);folder.setTextAlignment(1,Qt.AlignmentFlag.AlignRight|Qt.AlignmentFlag.AlignVCenter)
         self.notes.verticalScrollBar().setValue(scroll)
+        del blocker
         current=self.note_category.currentText();self.note_category.blockSignals(True);self.note_category.clear()
         self.note_category.addItems(['']+sorted({r[3] for r in self.store.note_entries() if r[3]}));self.note_category.setCurrentText(current);self.note_category.blockSignals(False)
+        self.update_note_shortcuts()
+    def collapsed_note_folders(self):
+        state=self.store.state('note_tree');values=state.get('collapsed') if isinstance(state,dict) else None
+        return {key for key in values if isinstance(key,str)} if isinstance(values,list) else set()
+    def save_note_tree(self,item):
+        if self.note_search.text():return
+        key=item.data(0,Qt.ItemDataRole.UserRole+1)
+        if not key:return
+        collapsed=self.collapsed_note_folders()
+        if item.isExpanded():collapsed.discard(key)
+        else:collapsed.add(key)
+        self.store.state('note_tree',{'collapsed':sorted(collapsed)})
+    def expand_note_folders(self,expanded):
+        def visit(parent):
+            for i in range(parent.childCount()):
+                item=parent.child(i)
+                if item.data(0,Qt.ItemDataRole.UserRole):continue
+                item.setExpanded(expanded);visit(item)
+        visit(self.notes.invisibleRootItem())
+    def make_note_tree_menu(self,item):
+        menu=QMenu(self.notes);nid=item.data(0,Qt.ItemDataRole.UserRole) if item else None
+        if nid:
+            record=self.store.note(nid)
+            menu.addAction('열기',lambda:self.open_note_id(nid));menu.addAction(self.rename_note_action)
+            menu.addAction('복제',lambda:self.duplicate_tree_note(nid))
+            menu.addAction('보관함에서 복구' if record and record[4] else '보관함으로 옮기기',lambda:self.archive_tree_note(nid))
+            menu.addSeparator();menu.addAction('버전 이력',lambda:self.tree_note_action(nid,self.note_history));menu.addAction('JSON 내보내기',lambda:self.tree_note_action(nid,self.export_note))
+        else:
+            if item:
+                path=item.data(0,Qt.ItemDataRole.UserRole+1);menu.addAction('이 폴더에 새 노트',lambda:self.new_folder_note(path))
+            else:menu.addAction(self.note_shortcuts['Ctrl+N'])
+            menu.addSeparator();menu.addAction('모두 펼치기',lambda:self.expand_note_folders(True));menu.addAction('모두 접기',lambda:self.expand_note_folders(False))
+        return menu
+    def note_tree_context_menu(self,pos):
+        shell_actions.select_for_context(self.notes,self.notes.indexAt(pos))
+        menu=self.make_note_tree_menu(self.notes.itemAt(pos));menu.exec(self.notes.viewport().mapToGlobal(pos));menu.deleteLater()
+    def rename_tree_note(self):
+        item=self.notes.currentItem();nid=item.data(0,Qt.ItemDataRole.UserRole) if item else None
+        if not nid:return
+        self.save_draft();record=self.store.note(nid)
+        if not record:return
+        title,ok=QInputDialog.getText(self,'이름 바꾸기','노트 이름',text=record[1]);title=title.strip()
+        if not ok or not title or title==record[1]:return
+        if self.note_mode and self.note_id==nid:self.note_title.setText(title);self.save_draft()
+        else:self.store.save_note(title,json.loads(record[2]),nid,record[3])
+        for i in range(1,self.note_tabs.count()):
+            if self.note_tabs.tabData(i).get('id')==nid:self.note_tabs.setTabText(i,title)
+        self.refresh_notes()
+    def duplicate_tree_note(self,nid):
+        self.save_draft();record=self.store.note(nid)
+        if not record:return
+        duplicate=self.store.save_note(record[1]+' 사본',json.loads(record[2]),None,record[3]);self.refresh_notes();self.open_note_id(duplicate)
+    def archive_tree_note(self,nid):
+        self.save_draft();record=self.store.note(nid)
+        if not record:return
+        self.store.archive_note(nid,not record[4]);self.refresh_notes()
+        self.statusBar().showMessage('노트를 복구했습니다.' if record[4] else '노트를 보관함으로 옮겼습니다. 내용과 이력은 유지됩니다.')
+    def tree_note_action(self,nid,fn):
+        self.open_note_id(nid);fn()
+    def new_folder_note(self,path):
+        self.new_note();self.note_category.setCurrentText('' if path=='/미분류' else (path or '').lstrip('/'))
     def save_draft(self):
         self.autosave.stop()
         if self.closed:return
@@ -847,6 +919,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         if self.restoring_documents:return
         ids=[self.note_tabs.tabData(i).get('id') for i in range(1,self.note_tabs.count())]
         self.store.state('documents',{'ids':[nid for nid in ids if nid],'active':self.note_id if self.note_mode else None})
+        self.update_note_shortcuts()
     def restore_documents(self):
         state=self.store.state('documents')
         if not isinstance(state,dict) or not isinstance(state.get('ids'),list):return
@@ -863,7 +936,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.note_tabs.blockSignals(True);index=self.note_tabs.addTab(title);self.note_tabs.setTabData(index,{'id':nid});self.note_tabs.blockSignals(False)
         self.select_document(index)
     def activate_document(self,index,save=True):
-        if index<0:return
+        if index<0 or (save and index==self.document_index):return
         if save:self.save_draft()
         if index:
             data=self.note_tabs.tabData(index) or {}
@@ -878,24 +951,63 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.draft.setPlainText(saved[0] if saved else (self.info['positive'] if self.info else ''))
         self.draft_negative.setPlainText(saved[1] if saved else (self.info['negative'] if self.info else ''));self.memo.setPlainText(saved[2] if saved else '')
         self.loading=False;self.select_document(0)
+    def update_note_shortcuts(self):
+        if not hasattr(self,'note_shortcuts'):return
+        for key in ('Ctrl+W','Ctrl+Tab','Ctrl+Shift+Tab'):self.note_shortcuts[key].setEnabled(self.main_tabs.currentIndex()==2)
+        self.note_shortcuts['Ctrl+Shift+T'].setEnabled(self.reopenable_note() is not None)
+    def cycle_note(self,step):
+        count=self.note_tabs.count()-1
+        if count:self.note_tabs.setCurrentIndex(1+(self.note_tabs.currentIndex()-1+step)%count)
+    def reopenable_note(self):
+        opened={self.note_tabs.tabData(i).get('id') for i in range(1,self.note_tabs.count())}
+        for nid in reversed(self.closed_note_ids):
+            record=self.store.note(nid)
+            if record and not record[4] and nid not in opened:return nid
+    def reopen_note(self):
+        nid=self.reopenable_note()
+        if nid:
+            self.closed_note_ids=self.closed_note_ids[:self.closed_note_ids.index(nid)]
+            self.open_note_id(nid)
+        self.update_note_shortcuts()
+    def eventFilter(self,watched,event):
+        if watched is self.note_tabs and event.type()==QEvent.Type.MouseButtonRelease and event.button()==Qt.MouseButton.MiddleButton:
+            self.close_document(self.note_tabs.tabAt(event.position().toPoint()));return True
+        return super().eventFilter(watched,event)
+    def note_tab_moved(self,source,target):
+        order=list(range(self.note_tabs.count()));order.insert(target,order.pop(source))
+        image=next(i for i in range(self.note_tabs.count()) if (self.note_tabs.tabData(i) or {}).get('image'))
+        if image:
+            with QSignalBlocker(self.note_tabs):self.note_tabs.moveTab(image,0)
+            order.insert(0,order.pop(image))
+        self.remap_note_contexts({old:new for new,old in enumerate(order)})
+        self.document_index=self.note_tabs.currentIndex();self.save_documents()
+    def make_note_tab_menu(self,index):
+        menu=QMenu(self.note_tabs)
+        if index>0:
+            for label,indices in (
+                ('이 탭 닫기',[index]),
+                ('오른쪽 탭 모두 닫기',list(range(index+1,self.note_tabs.count()))),
+                ('왼쪽 탭 모두 닫기',list(range(1,index))),
+                ('나머지 탭 모두 닫기',[i for i in range(1,self.note_tabs.count()) if i!=index]),
+            ):
+                action=menu.addAction(label);action.setEnabled(bool(indices));action.triggered.connect(lambda checked=False,targets=indices:self.close_documents(targets))
+        else:
+            menu.addAction(self.note_shortcuts['Ctrl+N']);menu.addAction(self.note_shortcuts['Ctrl+Shift+T'])
+        action=menu.addAction('모든 노트 탭 닫기',lambda:self.close_documents(list(range(1,self.note_tabs.count()))));action.setEnabled(self.note_tabs.count()>1)
+        if index>0:menu.addSeparator();menu.addAction(self.note_shortcuts['Ctrl+Shift+T'])
+        self.update_note_shortcuts();return menu
     def note_tab_context_menu(self,pos):
         index=self.note_tabs.tabAt(pos)
-        if index<=0:return
-        menu=QMenu(self.note_tabs);targets={}
-        for label,indices in (
-            ('이 탭 닫기',[index]),
-            ('오른쪽 탭 모두 닫기',list(range(index+1,self.note_tabs.count()))),
-            ('왼쪽 탭 모두 닫기',list(range(1,index))),
-            ('나머지 탭 모두 닫기',[i for i in range(1,self.note_tabs.count()) if i!=index]),
-        ):
-            action=menu.addAction(label);action.setEnabled(bool(indices));targets[action]=indices
-        chosen=menu.exec(self.note_tabs.mapToGlobal(pos))
-        # Remove from right to left so each remaining tab keeps its original index.
-        for target in reversed(targets.get(chosen,[])):self.close_document(target)
-        menu.deleteLater()
-    def close_document(self,index):
         if index==0:return
+        menu=self.make_note_tab_menu(index);menu.exec(self.note_tabs.mapToGlobal(pos));menu.deleteLater()
+    def close_documents(self,indices):
+        for target in sorted(indices,reverse=True):self.close_document(target)
+    def close_document(self,index):
+        if not 0<index<self.note_tabs.count():return
         self.save_draft()
+        nid=self.note_tabs.tabData(index).get('id')
+        if nid:self.closed_note_ids=[old for old in self.closed_note_ids if old!=nid][-9:]+[nid]
+        self.remap_note_contexts({old:old-(old>index) for old in range(self.note_tabs.count()) if old!=index})
         active=self.document_index
         self.note_tabs.blockSignals(True);self.note_tabs.removeTab(index);self.note_tabs.blockSignals(False)
         if active==index:
@@ -904,6 +1016,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         if hasattr(self,'main_tabs') and self.main_tabs.currentIndex()==2 and not self.note_mode:
             if self.note_tabs.count()>1:self.activate_document(min(index,self.note_tabs.count()-1))
             else:self.new_note()
+        self.update_note_shortcuts()
     def open_note(self,item,*args):
         nid=item.data(0,Qt.ItemDataRole.UserRole)
         if nid:self.open_note_id(nid)
@@ -1432,7 +1545,8 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
             self.statusBar().showMessage('재연결 완료 · 이전 기록은 유지했습니다. 열기를 눌러 복원하세요.')
     def save_window_state(self):
         self.save_browser_state()
-        self.store.state('window',{'path':str(self.path) if self.path else None,'reference':self.reference.text(),
+        state=self.store.state('window');state=state if isinstance(state,dict) else {}
+        self.store.state('window',{**state,'geometry':bytes(self.saveGeometry().toBase64()).decode('ascii'),'path':str(self.path) if self.path else None,'reference':self.reference.text(),
             'strength':self.strength.value(),'levels':self.levels.value(),'luminance':self.luminance.isChecked(),
             'feather':self.feather.value(),'ratio':self.ratio.currentText(),'model':self.model_path.text(),
             'threshold':self.threshold.value(),'char_threshold':self.char_threshold.value(),'exclude':self.exclude.text(),
@@ -1440,6 +1554,10 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
     def restore_window_state(self):
         state=self.store.state('window')
         if not isinstance(state,dict):return
+        geometry=state.get('geometry')
+        if isinstance(geometry,str):
+            try:self.restoreGeometry(base64.b64decode(geometry,validate=True))
+            except (ValueError,TypeError):pass
         self.precision.setCurrentIndex(max(0,self.precision.findData(state.get('precision','fp32'))))
         self.tone_backend.setCurrentIndex(max(0,self.tone_backend.findData(state.get('tone_backend','cpu'))))
         for key,widget in [('strength',self.strength),('levels',self.levels),('feather',self.feather),('threshold',self.threshold),('char_threshold',self.char_threshold),('batch_size',self.batch_size)]:
