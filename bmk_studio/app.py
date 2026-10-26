@@ -217,6 +217,8 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.note_mode = False
         self.document_index = 0
         self.closed_note_ids = []
+        self.note_loaded = None
+        self.note_tab_clock = 0
         self.loading = False
         self.history = []
         self.operations = []
@@ -245,7 +247,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.restore_library()
         self.restore_window_state()
         self.restore_documents()
-        self.restoring_documents=False;self.save_documents()
+        self.restoring_documents=False;self.save_documents();self.enforce_note_tab_limit()
         self.recovery_timer=QTimer(self);self.recovery_timer.setInterval(10000);self.recovery_timer.timeout.connect(self.auto_checkpoint);self.recovery_timer.start()
         self.initialize_workspace();self.restore_main_workspace()
         if self.store.needs_tag_search():
@@ -271,6 +273,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.viewer.setBackgroundBrush(QColor(CANVAS));refresh_highlighting()
         for key,section in getattr(self,'sections',{}).items():section.set_expanded((self.appearance.get('sections') or {}).get(key,section.default))
         if hasattr(self,'notes'):self.refresh_notes()
+        if hasattr(self,'note_tabs') and self.preview_index():self.set_tab_preview(self.preview_index(),True)  # recolor the icon for the theme
         self.viewer.set_interpolation(self.appearance.get('interpolation','smooth'))
         try:self.viewer.overscroll=max(0,min(50,int(self.appearance.get('overscroll',25))))
         except (ValueError,TypeError):self.viewer.overscroll=25
@@ -299,6 +302,10 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         recovery=QCheckBox('10초마다 변경된 편집을 백그라운드 복구본으로 저장');recovery.setChecked(self.appearance.get('auto_checkpoint',True))
         layout.addRow('화면 테마',theme);layout.addRow('미리보기 보간',interpolation);layout.addRow('가장자리 이동 여유',margin)
         layout.addRow('비정상 종료 복구',recovery)
+        tab_limit=QSpinBox();tab_limit.setRange(0,50);tab_limit.setSpecialValueText('제한 없음');tab_limit.setSuffix('개');tab_limit.setAccessibleName('열린 노트 탭 최대 개수')
+        try:tab_limit.setValue(int(self.appearance.get('note_tab_limit',0)))
+        except (TypeError,ValueError):pass
+        tab_limit.setToolTip('넘치면 오래 사용하지 않은 노트 탭부터 닫습니다. Ctrl+Shift+T로 다시 열 수 있습니다.');layout.addRow('열린 노트 탭 최대 개수',tab_limit)
         current_data=QLineEdit(str(self.store.root));current_data.setReadOnly(True);layout.addRow('사용자 데이터 폴더',current_data)
         change_data=button('사용자 데이터 폴더 변경…',lambda:dialog.reject() if self.change_data_directory() else None);layout.addRow(change_data)
         if data_location.session_directory or os.environ.get('BMK_STUDIO_DATA','').strip():
@@ -324,8 +331,8 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         if dialog.exec()==QDialog.DialogCode.Accepted:
             self.appearance.update(theme=theme.currentData(),interpolation=interpolation.currentData(),overscroll=margin.value())
             self.appearance['auto_checkpoint']=recovery.isChecked()
-            self.appearance['export_pattern']=naming.text()
-            self.store.state('appearance',self.appearance);self.apply_appearance()
+            self.appearance['export_pattern']=naming.text();self.appearance['note_tab_limit']=tab_limit.value()
+            self.store.state('appearance',self.appearance);self.apply_appearance();self.enforce_note_tab_limit()
 
     def change_data_directory(self):
         if data_location.session_directory or os.environ.get('BMK_STUDIO_DATA','').strip():return False
@@ -392,7 +399,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.note_browser=QWidget();nl=QVBoxLayout(self.note_browser);nl.setContentsMargins(0,0,8,0)
         nl.addWidget(caption('프롬프트 노트','section'))
         self.note_search=QLineEdit();self.note_search.setPlaceholderText('노트만 검색');self.note_search.textChanged.connect(self.refresh_notes);nl.addWidget(self.note_search)
-        self.notes = QTreeWidget();self.notes.setHeaderHidden(True); self.notes.itemClicked.connect(self.open_note); nl.addWidget(self.notes,2)
+        self.notes = QTreeWidget();self.notes.setHeaderHidden(True); self.notes.itemClicked.connect(self.open_note); self.notes.itemActivated.connect(self.keep_note); nl.addWidget(self.notes,2)
         self.notes.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu);self.notes.customContextMenuRequested.connect(self.note_tree_context_menu)
         self.notes.itemCollapsed.connect(self.save_note_tree);self.notes.itemExpanded.connect(self.save_note_tree)
         self.rename_note_action=QAction('이름 바꾸기…',self.notes);self.rename_note_action.setShortcut(QKeySequence('F2'));self.rename_note_action.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
@@ -449,6 +456,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.note_tabs.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.note_tabs.customContextMenuRequested.connect(self.note_tab_context_menu)
         self.note_tabs.setMovable(True);self.note_tabs.tabMoved.connect(self.note_tab_moved);self.note_tabs.installEventFilter(self)
+        self.note_tabs.tabBarDoubleClicked.connect(self.promote_preview)
         wl.addWidget(self.note_tabs)
         self.note_title=QLineEdit(); self.note_title.setPlaceholderText('프로젝트 / 캐릭터 / 노트 이름'); wl.addWidget(self.note_title)
         self.note_category=QComboBox();self.note_category.setEditable(True);self.note_category.setPlaceholderText('카테고리 (예: 캐릭터/의상)');wl.addWidget(self.note_category)
@@ -824,7 +832,8 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         muted=QColor(tokens()['muted'])
         for path,folder in folders.items():
             folder.setText(1,str(counts.get(path,0)));folder.setForeground(1,muted);folder.setTextAlignment(1,Qt.AlignmentFlag.AlignRight|Qt.AlignmentFlag.AlignVCenter)
-        self.notes.verticalScrollBar().setValue(scroll);self.notes.setAutoScroll(autoscroll)
+        # Lay out the rebuilt tree first; otherwise the stale scroll range clamps the restored position.
+        self.notes.doItemsLayout();self.notes.verticalScrollBar().setValue(scroll);self.notes.setAutoScroll(autoscroll)
         del blocker
         current=self.note_category.currentText();self.note_category.blockSignals(True);self.note_category.clear()
         self.note_category.addItems(['']+sorted({r[3] for r in self.store.note_entries() if r[3]}));self.note_category.setCurrentText(current);self.note_category.blockSignals(False)
@@ -898,29 +907,44 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
             self.update_library_search(str(self.path))
         if self.note_mode and not self.loading:
             if not self.note_id and not any((self.note_title.text().strip(),self.draft.toPlainText().strip(),self.draft_negative.toPlainText().strip(),self.memo.toPlainText().strip())) and not (set(self.note_extra)-{'schema','source','prompt','negative','notes'}):return
-            title=self.note_title.text().strip() or '제목 없는 노트';body=self.note_body();category=normalize_category(self.note_category.currentText())
+            state=self.note_state();title,body,category=state
             record=self.store.note(self.note_id) if self.note_id else None
-            if record is None or (record[1],json.loads(record[2]),record[3])!=(title,body,category):
-                self.note_id=self.store.save_note(title,body,self.note_id,category);self.refresh_notes()
+            # Viewing must not rewrite a note: imported notes miss fields that note_body() fills in, so only
+            # a change since the note was loaded counts as an edit (no new revision, timestamp or reordering).
+            edited=not self.note_id or self.note_loaded!=(self.note_id,state)
+            if record is None or (edited and (record[1],json.loads(record[2]),record[3])!=state):
+                self.note_id=self.store.save_note(title,body,self.note_id,category);self.note_loaded=(self.note_id,state);self.refresh_notes()
+                self.promote_preview()
             if self.document_index > 0:
-                self.note_tabs.setTabData(self.document_index,{'id':self.note_id})
+                self.note_tabs.setTabData(self.document_index,{**(self.note_tabs.tabData(self.document_index) or {}),'id':self.note_id})
                 self.note_tabs.setTabText(self.document_index,title)
         if not self.loading:self.save_documents()
     def note_body(self):
-        return {**self.note_extra,'schema':self.note_extra.get('schema',1),'prompt':self.draft.toPlainText(),'negative':self.draft_negative.toPlainText(),'notes':self.memo.toPlainText(),'source':self.note_extra.get('source',str(self.path) if self.path else None)}
+        body={**self.note_extra,'schema':self.note_extra.get('schema',1),'prompt':self.draft.toPlainText(),'negative':self.draft_negative.toPlainText(),'notes':self.memo.toPlainText()}
+        # Only image-mode saves record the open image; a loaded note without a source never borrows one.
+        if 'source' in self.note_extra or not self.note_mode:body['source']=self.note_extra.get('source',str(self.path) if self.path else None)
+        return body
+    def note_state(self):
+        return (self.note_title.text().strip() or '제목 없는 노트',self.note_body(),normalize_category(self.note_category.currentText()))
     def save_note(self):
         self.save_draft()
-        title=self.note_title.text().strip() or '제목 없는 노트'
-        self.note_id=self.store.save_note(title,self.note_body(),self.note_id,self.note_category.currentText());self.note_mode=True;self.refresh_notes();self.save_draft();self.statusBar().showMessage('노트와 버전 이력을 저장했습니다.')
+        title=self.note_title.text().strip() or '제목 없는 노트';body=self.note_body()
+        # The saved body (with an image-mode source) becomes the loaded state, so the follow-up autosave keeps it.
+        self.note_id=self.store.save_note(title,body,self.note_id,self.note_category.currentText());self.note_extra=dict(body);self.note_mode=True;self.note_loaded=(self.note_id,self.note_state())
+        self.refresh_notes();self.save_draft();self.statusBar().showMessage('노트와 버전 이력을 저장했습니다.')
         self.attach_note_tab(self.note_id,title)
         if hasattr(self,'main_tabs') and not self.main_switching:self.main_tabs.setCurrentIndex(2)
     def select_document(self,index):
         self.note_tabs.blockSignals(True);self.note_tabs.setCurrentIndex(index);self.note_tabs.blockSignals(False);self.document_index=index
+        if index>0:
+            # Last-use order for the optional tab limit.
+            self.note_tab_clock+=1;self.note_tabs.setTabData(index,{**(self.note_tabs.tabData(index) or {}),'used':self.note_tab_clock})
         self.save_documents()
     def save_documents(self):
         if self.restoring_documents:return
         ids=[self.note_tabs.tabData(i).get('id') for i in range(1,self.note_tabs.count())]
-        self.store.state('documents',{'ids':[nid for nid in ids if nid],'active':self.note_id if self.note_mode else None})
+        preview=self.preview_index()
+        self.store.state('documents',{'ids':[nid for nid in ids if nid],'preview':self.note_tabs.tabData(preview).get('id') if preview else None,'active':self.note_id if self.note_mode else None})
         self.update_note_shortcuts()
     def restore_documents(self):
         state=self.store.state('documents')
@@ -928,22 +952,49 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         for nid in state['ids']:
             if not isinstance(nid,str):continue
             record=self.store.note(nid)
-            if record:self.attach_note_tab(nid,record[1])
+            if record:self.attach_note_tab(nid,record[1],nid==state.get('preview'))
         self.select_document(0)
-        if isinstance(state.get('active'),str) and self.store.note(state['active']):self.open_note_id(state['active'])
-    def attach_note_tab(self,nid,title):
+        if isinstance(state.get('active'),str) and self.store.note(state['active']):self.open_note_id(state['active'],preview=state['active']==state.get('preview'))
+    def attach_note_tab(self,nid,title,preview=False):
         for index in range(1,self.note_tabs.count()):
             if self.note_tabs.tabData(index).get('id')==nid and nid:
+                # Opening an already previewed note normally keeps it.
+                if not preview:self.set_tab_preview(index,False)
                 self.select_document(index);self.note_tabs.setTabText(index,title);return
+        index=self.preview_index() if preview else None
+        if index is not None:
+            # One preview tab is reused, so clicking through the list does not pile up tabs.
+            self.note_tabs.setTabData(index,{**self.note_tabs.tabData(index),'id':nid});self.note_tabs.setTabText(index,title);self.select_document(index);return
         self.note_tabs.blockSignals(True);index=self.note_tabs.addTab(title);self.note_tabs.setTabData(index,{'id':nid});self.note_tabs.blockSignals(False)
-        self.select_document(index)
+        self.set_tab_preview(index,preview);self.select_document(index);self.enforce_note_tab_limit()
+    def preview_index(self):
+        return next((i for i in range(1,self.note_tabs.count()) if (self.note_tabs.tabData(i) or {}).get('preview')),None)
+    def set_tab_preview(self,index,on):
+        data={**(self.note_tabs.tabData(index) or {})}
+        if on:data['preview']=True
+        else:data.pop('preview',None)
+        self.note_tabs.setTabData(index,data);self.note_tabs.setTabIcon(index,icon('eye') if on else QIcon())
+        self.note_tabs.setTabToolTip(index,'미리보기 탭 · 편집하거나 탭을 더블클릭하면 고정됩니다.' if on else '')
+    def promote_preview(self,index=None):
+        index=self.document_index if index is None else index
+        if index>0 and (self.note_tabs.tabData(index) or {}).get('preview'):self.set_tab_preview(index,False);self.save_documents()
+    def enforce_note_tab_limit(self):
+        try:limit=max(0,int(self.appearance.get('note_tab_limit',0))) if hasattr(self,'appearance') else 0
+        except (TypeError,ValueError):limit=0
+        extra=self.note_tabs.count()-1-limit
+        if not limit or extra<=0 or self.restoring_documents:return
+        # Close the least recently used tabs other than the current one; Ctrl+Shift+T reopens them.
+        current=self.note_tabs.currentIndex()
+        oldest=sorted((i for i in range(1,self.note_tabs.count()) if i!=current),key=lambda i:(self.note_tabs.tabData(i) or {}).get('used',0))[:extra]
+        self.close_documents(oldest)
+        self.statusBar().showMessage(f'열린 노트 탭이 {limit}개를 넘어 오래 사용하지 않은 탭 {len(oldest)}개를 닫았습니다. Ctrl+Shift+T로 다시 열 수 있습니다.',6000)
     def activate_document(self,index,save=True):
         if index<0 or (save and index==self.document_index):return
         if save:self.save_draft()
         if index:
             data=self.note_tabs.tabData(index) or {}
             if data.get('id'):
-                self.open_note_id(data['id'],save=False);return
+                self.open_note_id(data['id'],save=False,preview=bool(data.get('preview')));return
             self.loading=True;self.note_id=None;self.note_extra={'source':None};self.note_mode=True
             self.note_title.clear();self.note_category.setCurrentText('');self.draft.clear();self.draft_negative.clear();self.memo.clear()
             self.loading=False;self.select_document(index);return
@@ -1026,9 +1077,13 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
             else:self.new_note()
         self.update_note_shortcuts()
     def open_note(self,item,*args):
+        # A single click previews; double-click or Enter (itemActivated) keeps the note in its own tab.
+        nid=item.data(0,Qt.ItemDataRole.UserRole)
+        if nid:self.open_note_id(nid,preview=True)
+    def keep_note(self,item,*args):
         nid=item.data(0,Qt.ItemDataRole.UserRole)
         if nid:self.open_note_id(nid)
-    def open_note_id(self,nid,save=True):
+    def open_note_id(self,nid,save=True,preview=False):
         if save:self.save_draft()
         self.loading=True
         record=self.store.note(nid)
@@ -1036,8 +1091,9 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.note_id=record[0];doc=json.loads(record[2]);self.note_mode=True
         self.note_extra=doc.copy()
         self.note_title.setText(record[1]);self.note_category.setCurrentText(record[3]);self.draft.setPlainText(doc.get('prompt',''));self.draft_negative.setPlainText(doc.get('negative',''));self.memo.setPlainText(doc.get('notes',''))
+        self.note_loaded=(self.note_id,self.note_state())
         self.loading=False;self.tabs.setCurrentIndex(1)
-        self.attach_note_tab(nid,record[1])
+        self.attach_note_tab(nid,record[1],preview)
         if hasattr(self,'main_tabs') and not self.main_switching:self.main_tabs.setCurrentIndex(2)
     def new_note(self):
         self.save_draft();self.loading=True;self.note_id=None;self.note_extra={'source':None};self.note_mode=True

@@ -24,6 +24,7 @@ PATHS = {
     'chevron-right': '<path d="m9 6 6 6-6 6"/>',
     'close': '<path d="M6 6l12 12M18 6 6 18"/>',
     'check': '<path d="m5 12 5 5L20 7"/>',
+    'eye': '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
 }
 
 # Neutral canvas behind images in both themes so colour judgement does not shift with the UI.

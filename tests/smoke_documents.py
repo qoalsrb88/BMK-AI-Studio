@@ -268,5 +268,58 @@ w.main_tabs.setCurrentIndex(1);assert w.draft.document().isUndoAvailable()
 w.main_tabs.setCurrentIndex(2);w.close_document(next(i for i in range(1,w.note_tabs.count()) if w.note_tabs.tabData(i).get('id')==second))
 w.main_tabs.setCurrentIndex(1);w.note_shortcuts['Ctrl+Shift+T'].trigger();assert w.main_tabs.currentIndex()==2 and w.note_id==second
 w.main_tabs.setCurrentIndex(1);assert w.draft.document().isUndoAvailable()
+close_window()
+
+# Viewing never rewrites a note: imported-shape notes keep body, history, list order and scroll position.
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QSpinBox,QDialogButtonBox
+w=Studio(root/'viewing');w.show();w.load(path);w.main_tabs.setCurrentIndex(2);app.processEvents()
+ids=[w.store.save_note(f'view {n:02d}',{'prompt':f'p{n}'},category='Imported') for n in range(60)]
+w.refresh_notes();app.processEvents()
+def order():return [w.notes.topLevelItem(0).child(i).data(0,Qt.ItemDataRole.UserRole) for i in range(w.notes.topLevelItem(0).childCount())]
+before=order();bodies={nid:w.store.note(nid)[2] for nid in ids};history={nid:len(w.store.revisions(nid)) for nid in ids}
+bar=w.notes.verticalScrollBar();bar.setValue(bar.maximum()//2);app.processEvents();scroll=bar.value();assert scroll>0
+tabs=w.note_tabs.count()
+for nid in ids[10:16]:w.open_note(tree_item(nid));app.processEvents()
+assert order()==before and bar.value()==scroll
+assert all(w.store.note(nid)[2]==bodies[nid] and len(w.store.revisions(nid))==history[nid] for nid in ids)
+# Clicking through the list reuses one preview tab.
+p=w.preview_index();assert w.note_tabs.count()==tabs+1 and p==w.note_tabs.count()-1 and w.note_tabs.tabData(p)['id']==ids[15]
+assert not w.note_tabs.tabIcon(p).isNull() and '미리보기' in w.note_tabs.tabToolTip(p)
+# A real edit saves once, keeps the tab, adds no borrowed image source and keeps the list scroll.
+w.draft.setPlainText('p15 edited');w.save_draft()
+saved=json.loads(w.store.note(ids[15])[2]);assert saved['prompt']=='p15 edited' and 'source' not in saved and len(w.store.revisions(ids[15]))==history[ids[15]]+1
+assert w.preview_index() is None and bar.value()==scroll
+w.open_note(tree_item(ids[20]));p=w.preview_index();assert p is not None and w.note_tabs.tabData(p)['id']==ids[20] and w.note_tabs.count()==tabs+2
+# Editing a preview and clicking on before autosave keeps the edited note in its own tab.
+w.draft.setPlainText('p20 quick edit');w.open_note(tree_item(ids[21]))
+kept=[w.note_tabs.tabData(i).get('id') for i in range(1,w.note_tabs.count()) if not w.note_tabs.tabData(i).get('preview')]
+assert ids[20] in kept and w.note_tabs.tabData(w.preview_index())['id']==ids[21] and json.loads(w.store.note(ids[20])[2])['prompt']=='p20 quick edit'
+w.note_tabs.tabBarDoubleClicked.emit(w.preview_index());assert w.preview_index() is None and w.note_tabs.tabIcon(w.document_index).isNull()
+w.open_note(tree_item(ids[22]));w.notes.itemActivated.emit(tree_item(ids[22]),0);assert w.preview_index() is None
+w.open_note(tree_item(ids[23]));menu=w.make_note_tree_menu(tree_item(ids[23]));menu.actions()[0].trigger();menu.deleteLater();assert w.preview_index() is None
+count=w.note_tabs.count();w.open_note(tree_item(ids[15]));assert w.note_tabs.count()==count and w.note_id==ids[15] and w.preview_index() is None
+# Switching to the preview tab does not keep it; restart restores it as a preview.
+w.open_note(tree_item(ids[24]));p=w.preview_index();w.note_tabs.setCurrentIndex(1);w.note_tabs.setCurrentIndex(p);assert w.preview_index()==p and w.note_id==ids[24]
+close_window();w=Studio(root/'viewing');w.show();app.processEvents()
+p=w.preview_index();assert p is not None and w.note_tabs.tabData(p)['id']==ids[24] and not w.note_tabs.tabIcon(p).isNull()
+# Image-mode "노트 저장" still records the open image and keeps it through follow-up autosaves.
+w.main_tabs.setCurrentIndex(1);w.draft.setPlainText('image to note');w.save_note();image_note=w.note_id
+assert json.loads(w.store.note(image_note)[2])['source']==str(path)
+w.save_draft();w.draft.setPlainText('image to note edited');w.save_draft();assert json.loads(w.store.note(image_note)[2])['source']==str(path)
+# Optional tab limit closes the least recently used tabs, never the current one, and they stay reopenable.
+w.appearance['note_tab_limit']=3
+for nid in ids[30:35]:w.open_note_id(nid)
+left=[w.note_tabs.tabData(i)['id'] for i in range(1,w.note_tabs.count())]
+assert left==ids[32:35] and w.note_id==ids[34] and w.reopenable_note() and '오래 사용하지 않은 탭' in w.statusBar().currentMessage()
+def set_limit():
+    dialog=app.activeModalWidget();next(s for s in dialog.findChildren(QSpinBox) if s.accessibleName()=='열린 노트 탭 최대 개수').setValue(2)
+    dialog.findChild(QDialogButtonBox).button(QDialogButtonBox.StandardButton.Save).click()
+QTimer.singleShot(0,set_limit);w.open_settings()
+assert w.store.state('appearance')['note_tab_limit']==2 and w.note_tabs.count()-1==2 and w.note_id==ids[34]
+w.appearance['note_tab_limit']=0
+for nid in ids[40:44]:w.open_note_id(nid)
+assert w.note_tabs.count()-1==6
+w.confirm_image_change=lambda:True
 close_window();guards.close()
-print('PASS: note tab menus, reorder/autosave/restart, reopen stack, middle close, editor shortcuts, tree menus, rename/duplicate/history preservation and persistent folder collapse; temporary artifacts:',root)
+print('PASS: note tab menus, reorder/autosave/restart, reopen stack, middle close, editor shortcuts, tree menus, rename/duplicate/history preservation and persistent folder collapse; viewing without rewrites, preview tab and tab limit; temporary artifacts:',root)
