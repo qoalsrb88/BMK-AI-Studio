@@ -577,7 +577,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         for shortcut,fn in [('Ctrl+O',self.open_file),('Ctrl+Shift+V',self.paste),('Ctrl+S',lambda:self.save_note() if self.note_mode else self.save_draft())]:
             action=QAction(self);action.setShortcut(QKeySequence(shortcut));action.triggered.connect(fn);self.addAction(action)
         self.note_shortcuts={}
-        for shortcut,label,fn in [('Ctrl+N','새 노트',self.new_note),('Ctrl+Shift+T','닫은 탭 다시 열기',self.reopen_note),
+        for shortcut,label,fn in [('Ctrl+N','새 노트',lambda:self.from_notes_tab(self.new_note)),('Ctrl+Shift+T','닫은 탭 다시 열기',lambda:self.from_notes_tab(self.reopen_note)),
                                  ('Ctrl+W','현재 노트 탭 닫기',lambda:self.close_document(self.note_tabs.currentIndex())),
                                  ('Ctrl+Tab','다음 노트 탭',lambda:self.cycle_note(1)),('Ctrl+Shift+Tab','이전 노트 탭',lambda:self.cycle_note(-1))]:
             action=QAction(label,self);action.setShortcut(QKeySequence(shortcut));action.triggered.connect(fn);self.addAction(action);self.note_shortcuts[shortcut]=action
@@ -807,6 +807,8 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         scroll=self.notes.verticalScrollBar().value();selected=self.notes.currentItem();selected_id=selected.data(0,Qt.ItemDataRole.UserRole) if selected else self.note_id
         collapsed=self.collapsed_note_folders();searching=bool(self.note_search.text())
         blocker=QSignalBlocker(self.notes)
+        # Re-selecting the current note must not auto-scroll: Qt would re-expand its collapsed folders, also later on show.
+        autoscroll=self.notes.hasAutoScroll();self.notes.setAutoScroll(False)
         self.notes.clear()
         folders={};counts={};folder_icon=icon('folder');note_icon=icon('note')
         for record in self.store.note_entries(self.note_search.text(),self.show_archived.isChecked()):
@@ -822,7 +824,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         muted=QColor(tokens()['muted'])
         for path,folder in folders.items():
             folder.setText(1,str(counts.get(path,0)));folder.setForeground(1,muted);folder.setTextAlignment(1,Qt.AlignmentFlag.AlignRight|Qt.AlignmentFlag.AlignVCenter)
-        self.notes.verticalScrollBar().setValue(scroll)
+        self.notes.verticalScrollBar().setValue(scroll);self.notes.setAutoScroll(autoscroll)
         del blocker
         current=self.note_category.currentText();self.note_category.blockSignals(True);self.note_category.clear()
         self.note_category.addItems(['']+sorted({r[3] for r in self.store.note_entries() if r[3]}));self.note_category.setCurrentText(current);self.note_category.blockSignals(False)
@@ -955,6 +957,12 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         if not hasattr(self,'note_shortcuts'):return
         for key in ('Ctrl+W','Ctrl+Tab','Ctrl+Shift+Tab'):self.note_shortcuts[key].setEnabled(self.main_tabs.currentIndex()==2)
         self.note_shortcuts['Ctrl+Shift+T'].setEnabled(self.reopenable_note() is not None)
+    def from_notes_tab(self,fn):
+        # Other screens enter notes through the normal switch, which holds the image editor's undo history.
+        if self.main_tabs.currentIndex()!=2:
+            created=self.note_tabs.count()==1;self.main_tabs.setCurrentIndex(2)
+            if created and fn==self.new_note:return
+        fn()
     def cycle_note(self,step):
         count=self.note_tabs.count()-1
         if count:self.note_tabs.setCurrentIndex(1+(self.note_tabs.currentIndex()-1+step)%count)

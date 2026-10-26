@@ -256,5 +256,17 @@ assert w.note_category.currentText()=='Characters/Clothes';count=len(w.store.not
 w.new_folder_note('/미분류');assert not w.note_category.currentText()
 menu=w.make_note_tree_menu(None);assert [a.text() for a in menu.actions()]==['새 노트','','모두 펼치기','모두 접기'];menu.actions()[-1].trigger();menu.deleteLater()
 assert '/Characters/Clothes' in w.store.state('note_tree')['collapsed']
+# Re-selecting the current note on refresh must not re-expand its collapsed folder, visibly or on the next show.
+w.open_note_id(second);w.refresh_notes();w.notes.setCurrentItem(tree_item(second));tree_item(folder='/Other').setExpanded(False);app.processEvents()
+w.refresh_notes();app.processEvents();assert not tree_item(folder='/Other').isExpanded()
+w.main_tabs.setCurrentIndex(1);app.processEvents();w.refresh_notes();w.main_tabs.setCurrentIndex(2);app.processEvents()
+assert not tree_item(folder='/Other').isExpanded() and '/Other' in w.store.state('note_tree')['collapsed']
+# Ctrl+N and Ctrl+Shift+T from the image screen keep the image editor's undo history, like a normal tab switch.
+w.main_tabs.setCurrentIndex(1);w.load(path);app.processEvents();w.draft.insertPlainText(' image edit');assert w.draft.document().isUndoAvailable()
+tabs=w.note_tabs.count();w.note_shortcuts['Ctrl+N'].trigger();assert w.main_tabs.currentIndex()==2 and w.note_tabs.count()==tabs+1 and w.note_id is None
+w.main_tabs.setCurrentIndex(1);assert w.draft.document().isUndoAvailable()
+w.main_tabs.setCurrentIndex(2);w.close_document(next(i for i in range(1,w.note_tabs.count()) if w.note_tabs.tabData(i).get('id')==second))
+w.main_tabs.setCurrentIndex(1);w.note_shortcuts['Ctrl+Shift+T'].trigger();assert w.main_tabs.currentIndex()==2 and w.note_id==second
+w.main_tabs.setCurrentIndex(1);assert w.draft.document().isUndoAvailable()
 close_window();guards.close()
 print('PASS: note tab menus, reorder/autosave/restart, reopen stack, middle close, editor shortcuts, tree menus, rename/duplicate/history preservation and persistent folder collapse; temporary artifacts:',root)
