@@ -9,11 +9,11 @@
 3. CPU 환경과 NVIDIA 환경에서 각각 새 출력 폴더로 빌드합니다. 기존 패키지를 덮어쓰지 않습니다.
 
 ```powershell
-$env:BMK_BUILD_FOLDER='package-0.9.13-cpu'
+$env:BMK_BUILD_FOLDER='package-0.9.14-cpu'
 $env:BMK_RELEASE_BUILD='1'
 # CPU torch를 설치한 독립 환경의 Python을 사용합니다.
 python build_windows.py
-python scripts/package_release.py package-0.9.13-cpu/BMK-AI-Studio release-0.9.13/BMK-AI-Studio-0.9.13-Windows-x64-CPU.zip
+python scripts/package_release.py package-0.9.14-cpu/BMK-AI-Studio release-0.9.14/BMK-AI-Studio-0.9.14-Windows-x64-CPU.zip
 ```
 
 NVIDIA판은 CUDA torch 환경에서 별도 BMK_BUILD_FOLDER를 지정하고 파일명 끝을 NVIDIA.zip으로 합니다. ZIP에는 EXE와 _internal 전체, 라이선스·사용 안내를 포함합니다. 모델은 포함하지 않습니다.
