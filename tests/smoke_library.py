@@ -166,6 +166,23 @@ def context_checks(paged):
     window.close();app.processEvents()
 
 context_checks(True);context_checks(False)
+
+# Ctrl+wheel resizes gallery thumbnails in 16px notches; plain wheel scrolls and the large-preview strip stays fixed.
+from PySide6.QtCore import QPointF
+from PySide6.QtGui import QWheelEvent
+def wheel(window,delta,modifiers=Qt.KeyboardModifier.ControlModifier):
+    viewport=window.library.viewport()
+    event=QWheelEvent(QPointF(20,20),QPointF(viewport.mapToGlobal(QPoint(20,20))),QPoint(),QPoint(0,delta),Qt.MouseButton.NoButton,modifiers,Qt.ScrollPhase.NoScrollPhase,False)
+    QApplication.sendEvent(viewport,event);app.processEvents()
+(root/'wheel').mkdir();window=Studio(root/'wheel'/'data');window.show();window.workspace_mode.setCurrentIndex(0);app.processEvents()
+window.thumbnail_slider.setValue(128);assert window.library.iconSize().width()==128
+wheel(window,120);assert window.thumbnail_slider.value()==144 and window.library.iconSize().width()==144 and window.store.state('appearance')['thumbnail_size']==144
+wheel(window,-240);assert window.thumbnail_slider.value()==112
+wheel(window,60);assert window.thumbnail_slider.value()==112;wheel(window,60);assert window.thumbnail_slider.value()==128
+wheel(window,120,Qt.KeyboardModifier.NoModifier);assert window.thumbnail_slider.value()==128
+window.thumbnail_slider.setValue(512);wheel(window,120);assert window.thumbnail_slider.value()==512
+window.workspace_mode.setCurrentIndex(1);app.processEvents();wheel(window,-120);assert window.thumbnail_slider.value()==512 and window.library.iconSize().width()==96
+window.close();app.processEvents()
 patches.close()
 print(f'PASS: 20,000 records, lazy bounded thumbnail cache; insertion {insert_time:.2f}s, filter {filter_time:.2f}s; work/tag search; remove/restart/stale-index/watch exclusion; explicit re-add; source hash preserved')
-print('PASS: paged/memory context menus, right-click selection without loading, shell/copy actions, stale folder scans, Delete/undo, search/editor focus and arrow/Enter keys; all source hashes preserved')
+print('PASS: paged/memory context menus, right-click selection without loading, shell/copy actions, stale folder scans, Delete/undo, search/editor focus and arrow/Enter keys; all source hashes preserved; Ctrl+wheel gallery resize')

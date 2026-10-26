@@ -93,7 +93,7 @@ class LibraryView(QListView):
         from .large_thumbnails import LargeThumbnails
         self.large=LargeThumbnails(self) if database else None
         self.setDragEnabled(True)
-        self.favorite_ratings={}
+        self.favorite_ratings={};self.wheel_remainder=0
         self.search_timer=QTimer(self);self.search_timer.setSingleShot(True);self.search_timer.setInterval(100);self.search_timer.timeout.connect(self.start_search)
         self.proxy.setSourceModel(self.records);self.proxy.setFilterRole(ROLE.UserRole+1);self.setModel(self.proxy)
         self.setUniformItemSizes(True);self.setLayoutMode(QListView.LayoutMode.Batched);self.setBatchSize(200);self.setItemDelegate(LibraryCardDelegate(self))
@@ -136,6 +136,17 @@ class LibraryView(QListView):
         self.hide_remove();super().leaveEvent(event)
     def resizeEvent(self,event):
         self.hide_remove();super().resizeEvent(event)
+    def wheelEvent(self,event):
+        # Ctrl+wheel resizes gallery thumbnails like the file browser; the large-preview strip keeps its fixed size.
+        if event.modifiers()&Qt.KeyboardModifier.ControlModifier and self.owner and getattr(self.owner,'active_workspace',None)=='browse':
+            self.wheel_remainder+=event.angleDelta().y() or event.pixelDelta().y()
+            steps=int(self.wheel_remainder/120)
+            if steps:
+                anchor=self.indexAt(event.position().toPoint())
+                self.wheel_remainder-=steps*120;slider=self.owner.thumbnail_slider;slider.setValue(slider.value()+steps*16)
+                if anchor.isValid():self.scrollTo(anchor)
+            event.accept();return
+        super().wheelEvent(event)
     def keyPressEvent(self,event):
         # The keypad Del arrives with KeypadModifier; only user-held modifiers disable removal.
         if self.hasFocus() and event.modifiers()&~Qt.KeyboardModifier.KeypadModifier==Qt.KeyboardModifier.NoModifier and event.key()==Qt.Key.Key_Delete:

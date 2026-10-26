@@ -380,7 +380,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.library.removeRequested.connect(lambda path:self.remove_library_paths([path]))
         self.library.doubleClicked.connect(lambda index:self.workspace_mode.setCurrentIndex(1))
         self.thumbnail_label=caption('64px');self.thumbnail_slider=QSlider(Qt.Orientation.Horizontal);self.thumbnail_slider.setFixedWidth(90)
-        self.thumbnail_slider.setRange(40,512);self.thumbnail_slider.setValue(64);self.thumbnail_slider.setAccessibleName('갤러리 썸네일 크기');self.thumbnail_slider.setToolTip('갤러리 썸네일 크기')
+        self.thumbnail_slider.setRange(40,512);self.thumbnail_slider.setValue(64);self.thumbnail_slider.setAccessibleName('갤러리 썸네일 크기');self.thumbnail_slider.setToolTip('갤러리 썸네일 크기 · Ctrl+휠')
         self.thumbnail_slider.valueChanged.connect(self.resize_thumbnails)
         manage=self.add_section(ll,'manage','목록 관리')
         manage.add(button('선택 항목을 목록에서 제거',self.remove_library_selection))
