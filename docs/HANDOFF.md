@@ -136,7 +136,7 @@ EXE를 새로 배포할 때는 소스 검사만으로 완료하지 않습니다.
 
 위 파일명은 별도 표시가 없으면 `bmk_studio/` 기준입니다. `legacy_update_dialog.py`와 이전 서명·설치 모듈은 현재 공개 업데이트 화면으로 연결하지 않습니다.
 
-상세 사용법은 [USAGE](USAGE.md), 환경·실행은 [DEVELOPMENT](DEVELOPMENT.md), 변경 이력은 [DISTRIBUTION_PROGRESS](DISTRIBUTION_PROGRESS.md)를 참고합니다. 로컬의 `validation-0.9.12/`, `validation-maintenance/`, `.backups/`에는 당시 검사·바로가기 백업이 있으나 Git 복제본에는 포함되지 않습니다. 공개 검증 요약은 Release의 `RELEASE_VALIDATION.json`에 있으며 게시 당시 결과입니다. 이 세션에서 수집한 개인 경로 포함 로그를 통째로 공개하지 마세요.
+상세 사용법은 [USAGE](USAGE.md), 환경·실행은 [DEVELOPMENT](DEVELOPMENT.md), 변경 이력은 [DISTRIBUTION_PROGRESS](DISTRIBUTION_PROGRESS.md)를 참고합니다. 로컬의 최신 `validation-<버전>/`, `.backups/`에는 당시 검사·배포 스크립트와 데이터·바로가기 백업이 있으나 Git 복제본에는 포함되지 않습니다. 개발 PC의 폴더를 정리할 때도 `.venv`, CPU 빌드 환경 `build/cpu-env`, 바로가기가 가리키는 최신 `portable/…-NVIDIA`, 최신 `release-<버전>/`(다음 배포에 복사할 Qt/PySide 소스), 최신 `validation-<버전>/`(다음 배포에 옮겨 쓸 스크립트), `.backups/`(노트·설정 백업)는 남깁니다. 공개 검증 요약은 Release의 `RELEASE_VALIDATION.json`에 있으며 게시 당시 결과입니다. 이 세션에서 수집한 개인 경로 포함 로그를 통째로 공개하지 마세요.
 
 ## 새 세션 시작용 요청문
 
