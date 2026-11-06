@@ -133,6 +133,8 @@ class Store:
         CREATE TABLE IF NOT EXISTS library_hidden(path TEXT PRIMARY KEY);
         CREATE TABLE IF NOT EXISTS source_identity(path TEXT PRIMARY KEY, hash TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS tag_search(path TEXT PRIMARY KEY, stamp TEXT NOT NULL, text TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS note_sync(note_id TEXT PRIMARY KEY, path TEXT NOT NULL, file_hash TEXT NOT NULL,
+            doc_hash TEXT NOT NULL, title TEXT NOT NULL, category TEXT NOT NULL);
         ''')
 
     def save_asset(self, path, metadata, draft, negative, memo):

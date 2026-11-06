@@ -89,7 +89,7 @@ class MainTabsMixin:
             path=str(self.path);positive=self.info.get('positive','');negative=self.info.get('negative','');work=self.draft.toPlainText();work_negative=self.draft_negative.toPlainText();tags=self.tag_text()
         dialog=NoteTransferDialog(self,path,[('원본 프롬프트','prompt',positive,True),('원본 네거티브','negative',negative,True),('작업 프롬프트','prompt',work,False),('작업 네거티브','negative',work_negative,False),('추정 태그','prompt',tags,False)])
         if dialog.exec()==QDialog.DialogCode.Accepted:
-            self.transferred_note=dialog.saved_id;self.refresh_notes();self.open_saved_note.show();self.statusBar().showMessage('노트에 저장했습니다. 현재 이미지 작업은 유지됩니다.',6000)
+            self.transferred_note=dialog.saved_id;self.refresh_notes();self.note_sync_soon();self.open_saved_note.show();self.statusBar().showMessage('노트에 저장했습니다. 현재 이미지 작업은 유지됩니다.',6000)
     def open_transferred_note(self):
         self.main_tabs.setCurrentIndex(2);self.open_note_id(self.transferred_note)
     def note_to_image(self):

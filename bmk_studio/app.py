@@ -183,8 +183,9 @@ class CheckpointWait(QDialog):
     def closeEvent(self,event):event.ignore()
 
 from .main_tabs import MainTabsMixin
+from .note_sync_ui import NoteSyncMixin
 
-class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
+class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWindow):
     def __init__(self, root=None, location_config=None):
         super().__init__()
         self.setWindowTitle(f'BMK AI Studio {__version__} · 이미지와 프롬프트 작업실')
@@ -250,7 +251,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.restore_documents()
         self.restoring_documents=False;self.save_documents();self.enforce_note_tab_limit()
         self.recovery_timer=QTimer(self);self.recovery_timer.setInterval(10000);self.recovery_timer.timeout.connect(self.auto_checkpoint);self.recovery_timer.start()
-        self.initialize_workspace();self.restore_main_workspace()
+        self.initialize_workspace();self.restore_main_workspace();self.init_note_sync()
         if self.store.needs_tag_search():
             root=self.store.root
             def migrate_search():
@@ -323,10 +324,12 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         naming.textChanged.connect(preview_name);preview_name()
         layout.addRow(QLabel('{source} {date} {time} {width} {height} {note} · 금지 문자는 자동 정리'))
         hint=QLabel('이동 여유는 화면 크기 기준이며 이미지 크기의 절반을 넘지 않습니다.\n미리보기 우클릭으로도 보간을 변경할 수 있습니다.\n설정은 다음 실행에도 유지됩니다.');hint.setWordWrap(True);layout.addRow(hint)
+        sync_values,sync_problem=self.note_sync_settings_rows(layout,dialog)
         controls=QDialogButtonBox(QDialogButtonBox.StandardButton.Save|QDialogButtonBox.StandardButton.Cancel)
         def accept_settings():
             try:export_stem(naming.text(),'image.png',(1024,1024))
             except ValueError as exc:self.error(str(exc));return
+            if sync_problem():self.error(sync_problem());return
             dialog.accept()
         controls.accepted.connect(accept_settings);controls.rejected.connect(dialog.reject);layout.addRow(controls)
         if dialog.exec()==QDialog.DialogCode.Accepted:
@@ -334,6 +337,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
             self.appearance['auto_checkpoint']=recovery.isChecked()
             self.appearance['export_pattern']=naming.text();self.appearance['note_tab_limit']=tab_limit.value()
             self.store.state('appearance',self.appearance);self.apply_appearance();self.enforce_note_tab_limit()
+            self.apply_note_sync_settings(*sync_values())
 
     def change_data_directory(self):
         if data_location.session_directory or os.environ.get('BMK_STUDIO_DATA','').strip():return False
@@ -343,7 +347,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         if dialog.exec()!=QDialog.DialogCode.Accepted:return False
         if self.jobs:
             self.error('폴더 선택 중 시작된 백그라운드 작업이 있습니다. 완료 또는 취소 후 다시 변경하세요.');return False
-        self.autosave.stop();self.recovery_timer.stop();self.library.stop_search();self.disk_browser.set_active(False)
+        self.autosave.stop();self.recovery_timer.stop();self.stop_note_sync();self.library.stop_search();self.disk_browser.set_active(False)
         success=False
         try:
             self.save_draft();self.save_documents();self.save_window_state();self.save_queue()
@@ -358,6 +362,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
             if not success:
                 self.recovery_timer.start();self.library.resume_search();self.disk_browser.set_active(self.workspace_mode.currentData()=='disk')
                 self.autosave.start()
+                if self.note_sync_enabled():self.note_sync_poll.start()
 
     def build(self):
         host = QWidget()
@@ -412,7 +417,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.notes.header().setSectionResizeMode(0,QHeaderView.ResizeMode.Stretch);self.notes.header().setSectionResizeMode(1,QHeaderView.ResizeMode.ResizeToContents)
         self.show_archived=QCheckBox('보관함 보기');self.show_archived.toggled.connect(self.refresh_notes);nl.addWidget(self.show_archived)
         nl.addWidget(row(button('노트 가져오기',self.import_notes),button('새 노트',self.new_note)))
-        nl.addWidget(button('노트 폴더 가져오기',self.import_note_folder))
+        nl.addWidget(button('노트 폴더 가져오기',self.import_note_folder));self.build_note_sync(nl)
         self.notes.setMinimumHeight(150)
         sidebar=QScrollArea();sidebar.setWidgetResizable(True);sidebar.setWidget(left);sidebar.setMinimumWidth(245);splitter.addWidget(sidebar)
         center_host=QWidget();center_layout=QVBoxLayout(center_host);center_layout.setContentsMargins(6,0,6,0)
@@ -888,15 +893,15 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         for i in range(1,self.note_tabs.count()):
             # Renaming is an edit, so a previewed note keeps its tab like any other change.
             if self.note_tabs.tabData(i).get('id')==nid:self.note_tabs.setTabText(i,title);self.promote_preview(i)
-        self.refresh_notes()
+        self.refresh_notes();self.note_sync_soon()
     def duplicate_tree_note(self,nid):
         self.save_draft();record=self.store.note(nid)
         if not record:return
-        duplicate=self.store.save_note(record[1]+' 사본',json.loads(record[2]),None,record[3]);self.refresh_notes();self.open_note_id(duplicate)
+        duplicate=self.store.save_note(record[1]+' 사본',json.loads(record[2]),None,record[3]);self.refresh_notes();self.note_sync_soon();self.open_note_id(duplicate)
     def archive_tree_note(self,nid):
         self.save_draft();record=self.store.note(nid)
         if not record:return
-        self.store.archive_note(nid,not record[4]);self.refresh_notes()
+        self.store.archive_note(nid,not record[4]);self.refresh_notes();self.note_sync_soon()
         self.statusBar().showMessage('노트를 복구했습니다.' if record[4] else '노트를 보관함으로 옮겼습니다. 내용과 이력은 유지됩니다.')
     def tree_note_action(self,nid,fn):
         self.open_note_id(nid);fn()
@@ -918,7 +923,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
             edited=not self.note_id or self.note_loaded!=(self.note_id,state)
             if record is None or (edited and (record[1],json.loads(record[2]),record[3])!=state):
                 self.note_id=self.store.save_note(title,body,self.note_id,category);self.note_loaded=(self.note_id,state);self.refresh_notes()
-                self.promote_preview()
+                self.promote_preview();self.note_sync_soon()
             if self.document_index > 0:
                 self.note_tabs.setTabData(self.document_index,{**(self.note_tabs.tabData(self.document_index) or {}),'id':self.note_id})
                 self.note_tabs.setTabText(self.document_index,title)
@@ -935,7 +940,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         title=self.note_title.text().strip() or '제목 없는 노트';body=self.note_body()
         # The saved body (with an image-mode source) becomes the loaded state, so the follow-up autosave keeps it.
         self.note_id=self.store.save_note(title,body,self.note_id,self.note_category.currentText());self.note_extra=dict(body);self.note_mode=True;self.note_loaded=(self.note_id,self.note_state())
-        self.refresh_notes();self.save_draft();self.statusBar().showMessage('노트와 버전 이력을 저장했습니다.')
+        self.refresh_notes();self.save_draft();self.note_sync_soon();self.statusBar().showMessage('노트와 버전 이력을 저장했습니다.')
         self.attach_note_tab(self.note_id,title)
         if hasattr(self,'main_tabs') and not self.main_switching:self.main_tabs.setCurrentIndex(2)
     def select_document(self,index):
@@ -1123,11 +1128,11 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         self.save_draft();nid=self.note_id
         self.store.restore_revision(nid,revision_id)
         # Avoid saving the obsolete editor over the restored record on navigation.
-        self.open_note_id(nid,save=False);self.refresh_notes();self.statusBar().showMessage('선택 버전을 새 이력으로 복원했습니다.')
+        self.open_note_id(nid,save=False);self.refresh_notes();self.note_sync_soon();self.statusBar().showMessage('선택 버전을 새 이력으로 복원했습니다.')
     def archive_current_note(self):
         self.save_draft()
         if not self.note_id:self.statusBar().showMessage('먼저 노트를 선택하세요.');return
-        record=self.store.note(self.note_id);self.store.archive_note(self.note_id,not record[4]);self.refresh_notes()
+        record=self.store.note(self.note_id);self.store.archive_note(self.note_id,not record[4]);self.refresh_notes();self.note_sync_soon()
         self.statusBar().showMessage('노트를 복구했습니다.' if record[4] else '노트를 보관함으로 옮겼습니다. 내용과 이력은 유지됩니다.')
     def import_notes(self):
         paths,_=QFileDialog.getOpenFileNames(self,'BMK 노트 JSON 가져오기','','JSON (*.json)')
@@ -1151,7 +1156,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
                 finally:store.db.close()
             self.statusBar().showMessage(f"노트 {len(plan['import']):,}개를 가져오는 중…");self.task(work,done)
         def done(report):
-            self.refresh_notes();status,message,details=note_import_summary(report)
+            self.refresh_notes();self.note_sync_soon();status,message,details=note_import_summary(report)
             self.statusBar().showMessage(status)
             if report['skipped'] or report['failed']:self.show_note_import_report(message,details)
         self.statusBar().showMessage('노트 JSON 파일을 확인하는 중…');self.task(scan,planned)
@@ -1687,7 +1692,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         return False
     def finish_close(self,event):
         self.closed=True;self.closing_requested=True
-        self.autosave.stop();self.recovery_timer.stop();self.workspace_timer.stop()
+        self.autosave.stop();self.recovery_timer.stop();self.workspace_timer.stop();self.stop_note_sync()
         self.store.db.close();event.accept()
     def closeEvent(self,event):
         if self.closed:event.accept();return
@@ -1695,7 +1700,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
             self.finish_close(event);return
         if not self.closing_requested and not self.confirm_image_change():event.ignore();return
         self.save_main_workspace();self.disk_browser.set_active(False);self.disk_browser.save()
-        self.library.stop_search()
+        self.library.stop_search();self.flush_note_sync_on_close()
         if self.jobs:
             self.queue_running=False
             self.closing_requested=True;self.pending_index.clear();self.setEnabled(False)
