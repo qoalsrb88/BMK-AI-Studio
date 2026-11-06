@@ -200,10 +200,12 @@ class Store:
         """Comparable bodies of every stored note (archived included) by (category, title)."""
         index={}
         for title,body,category in self.db.execute('SELECT n.title,n.body,COALESCE(m.category,\'\') FROM notes n LEFT JOIN note_meta m ON m.note_id=n.id'):
-            try:content=note_content(json.loads(body))
-            except (ValueError,TypeError,AttributeError):content=None
-            index.setdefault((category,title),[]).append(content)
+            index.setdefault((category,title),[]).append(stored_note_content(body))
         return index
+
+    def stored_note_bodies(self,title,category):
+        rows=self.db.execute('SELECT n.body FROM notes n LEFT JOIN note_meta m ON m.note_id=n.id WHERE n.title=? AND COALESCE(m.category,\'\')=?',(title,category))
+        return [stored_note_content(body) for (body,) in rows]
 
     def plan_note_import(self,paths,base=None):
         """Read and classify note JSON files without writing anything."""
@@ -215,7 +217,7 @@ class Store:
             if reason:plan['skipped'].append({'path':str(path),'kind':'excluded','reason':reason});continue
             try:
                 if path.stat().st_size>NOTE_IMPORT_MAX_BYTES:
-                    plan['skipped'].append({'path':str(path),'kind':'not_note','reason':'BMK 노트로 보기에 너무 큰 파일'});continue
+                    plan['skipped'].append({'path':str(path),'kind':'not_note','reason':'BMK 노트로 보기에 너무 큰 파일 (1MB 초과)'});continue
                 doc=json.loads(path.read_text(encoding='utf-8-sig'))
                 reason=note_skip_reason(doc)
                 if reason:plan['skipped'].append({'path':str(path),'kind':'not_note','reason':reason});continue
@@ -225,7 +227,7 @@ class Store:
                     relative=path.parent.resolve().relative_to(Path(base).resolve())
                     category='' if str(relative)=='.' else relative.as_posix()
                 category=normalize_category(category)
-                existing=note_import_conflict(index,title,category,doc)
+                existing=note_import_conflict(index.get((category,title)),doc)
                 if existing:plan['skipped'].append({'path':str(path),'title':title,'category':category,**existing});continue
                 index.setdefault((category,title),[]).append(note_content(doc))
                 plan['import'].append({'path':str(path),'title':title,'category':category,'doc':doc})
@@ -235,15 +237,21 @@ class Store:
     def apply_note_import(self,plan):
         """Create the planned notes; never replaces a note that appeared since planning."""
         report={'base':plan['base'],'scanned':plan['scanned'],'imported':[],'skipped':list(plan['skipped']),'failed':list(plan['failed'])}
-        # One import at a time, so a second run started meanwhile sees the first run's notes.
+        # One import at a time; each note is checked against the database and inserted in one
+        # write transaction, so notes saved meanwhile (editor, another import) are never duplicated.
         with NOTE_IMPORT_LOCK:
-            index=self.note_import_index()
             for entry in plan['import']:
                 try:
-                    existing=note_import_conflict(index,entry['title'],entry['category'],entry['doc'])
-                    if existing:report['skipped'].append({'path':entry['path'],'title':entry['title'],'category':entry['category'],**existing});continue
-                    nid=self.save_note(entry['title'],entry['doc'],category=entry['category'])
-                    index.setdefault((entry['category'],entry['title']),[]).append(note_content(entry['doc']))
+                    self.db.execute('BEGIN IMMEDIATE')
+                    try:
+                        existing=note_import_conflict(self.stored_note_bodies(entry['title'],entry['category']),entry['doc'])
+                        if existing:
+                            self.db.rollback()
+                            report['skipped'].append({'path':entry['path'],'title':entry['title'],'category':entry['category'],**existing});continue
+                        nid=self.save_note(entry['title'],entry['doc'],category=entry['category'])  # commits the transaction
+                    except BaseException:
+                        if self.db.in_transaction:self.db.rollback()
+                        raise
                     report['imported'].append({'path':entry['path'],'id':nid})
                 except Exception as exc:report['failed'].append({'path':entry['path'],'error':str(exc)})
         return report
@@ -336,7 +344,7 @@ NOTE_TEXT_FIELDS=('prompt','negative','notes')
 NOTE_MARKER_FIELDS=('loras','params','ui','_studio_category','_studio_image_transfers')
 NOTE_APP_FIELDS=('schema','source')
 NOTE_IMPORT_CONFIRM=200
-NOTE_IMPORT_MAX_BYTES=5*1024*1024
+NOTE_IMPORT_MAX_BYTES=1024*1024  # real notes are a few KB (largest seen ~30 KB); bounds memory of a plan
 NOTE_IMPORT_LOCK=threading.Lock()
 NOTE_SAME='같은 분류·제목에 내용이 같은 노트가 이미 있음'
 NOTE_CONFLICT='같은 분류·제목의 노트가 있지만 내용이 다름 · 기존 노트를 덮어쓰지 않음'
@@ -376,8 +384,12 @@ def same_note(doc,body):
     content=note_content(doc)
     return {key:value for key,value in body.items() if key in content or key not in NOTE_APP_FIELDS}==content
 
-def note_import_conflict(index,title,category,doc):
-    bodies=index.get((category,title))
+def stored_note_content(body):
+    try:return note_content(json.loads(body))
+    except (ValueError,TypeError,AttributeError):return None
+
+def note_import_conflict(bodies,doc):
+    """Same or changed note for the stored bodies with the file's folder and title, or None."""
     if not bodies:return None
     if any(same_note(doc,body) for body in bodies):return {'kind':'same','reason':NOTE_SAME}
     return {'kind':'conflict','reason':NOTE_CONFLICT}

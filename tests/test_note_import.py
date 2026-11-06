@@ -1,6 +1,6 @@
 import json,tempfile,unittest
 from pathlib import Path
-from bmk_studio.core import (Store,NOTE_CONFLICT,NOTE_SAME,note_json_files,note_skip_reason,note_import_exclusion,
+from bmk_studio.core import (Store,NOTE_CONFLICT,NOTE_SAME,NOTE_IMPORT_MAX_BYTES,note_json_files,note_skip_reason,note_import_exclusion,
                              note_import_question,note_import_summary)
 
 COMFY_NOTE={'prompt':'1girl, solo','negative':'lowres','notes':'memo','loras':[{'name':'style','weight':.8,'enabled':True}],'ui':{'order':['prompt']}}
@@ -36,13 +36,15 @@ class NoteImportTests(unittest.TestCase):
         write(self.folder/'image_meta.json',{'prompt':{'3':{'class_type':'KSampler'}},'workflow':{'nodes':[]}})
         write(self.folder/'bot_settings.json',{'prompt':'You are a helpful bot','model':'x','temperature':.7})
         write(self.folder/'cache.json',[1,2,3])
+        write(self.folder/'huge.json',{**COMFY_NOTE,'notes':'x'*NOTE_IMPORT_MAX_BYTES})
         report=self.import_folder()
         self.assertEqual(sorted(self.store.note(item['id'])[1] for item in report['imported']),['export','hero'])
         self.assertEqual({r[1]:r[3] for r in self.store.note_entries()},{'hero':'캐릭터','export':'내보냄/폴더'})
         self.assertEqual(self.kinds(report),[('.bmk_meta.json','excluded'),('.bmk_param_presets.json','excluded'),('api.json','not_note'),
-            ('bot_settings.json','not_note'),('cache.json','not_note'),('deleted.json','excluded'),('image_meta.json','not_note'),
-            ('old.json','excluded'),('workflow.json','not_note')])
-        self.assertEqual(report['failed'],[]);self.assertEqual(report['scanned'],11)
+            ('bot_settings.json','not_note'),('cache.json','not_note'),('deleted.json','excluded'),('huge.json','not_note'),
+            ('image_meta.json','not_note'),('old.json','excluded'),('workflow.json','not_note')])
+        self.assertIn('1MB 초과',next(item['reason'] for item in report['skipped'] if item['path'].endswith('huge.json')))
+        self.assertEqual(report['failed'],[]);self.assertEqual(report['scanned'],12)
 
     def test_note_shape_rules(self):
         accepted=[COMFY_NOTE,{'prompt':'','negative':'','notes':''},{'prompt':'only','loras':[]},{'notes':'memo','params':[]},
@@ -106,6 +108,20 @@ class NoteImportTests(unittest.TestCase):
         first,second=(self.store.plan_note_import(note_json_files(self.folder),self.folder) for _ in range(2))
         self.assertEqual(len(self.store.apply_note_import(first)['imported']),1)
         self.assertEqual(self.store.apply_note_import(second)['imported'],[]);self.assertEqual(len(self.store.note_entries()),2)
+
+    def test_apply_sees_notes_saved_by_the_editor_meanwhile(self):
+        write(self.folder/'a.json',COMFY_NOTE);write(self.folder/'b.json',COMFY_NOTE)
+        plan=self.store.plan_note_import(note_json_files(self.folder),self.folder)
+        editor=Store(self.root/'data');original=self.store.save_note
+        def save_then_edit(title,*args,**kwargs):
+            nid=original(title,*args,**kwargs)
+            if title=='a':editor.save_note('b',{'prompt':'typed in the editor','negative':'','notes':''})  # another connection, mid-import
+            return nid
+        self.store.save_note=save_then_edit
+        try:report=self.store.apply_note_import(plan)
+        finally:editor.db.close()
+        self.assertEqual([Path(item['path']).name for item in report['imported']],['a.json'])
+        self.assertEqual(self.kinds(report),[('b.json','conflict')]);self.assertEqual(len(self.store.note_entries()),2)
 
     def test_question_and_summary_texts(self):
         for i in range(3):write(self.folder/f'캐릭터/{i}.json',COMFY_NOTE)
