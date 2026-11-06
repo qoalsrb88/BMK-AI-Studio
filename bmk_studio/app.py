@@ -28,7 +28,8 @@ from .crop_ui import CropInteraction,bounded_box,anchored_box,snap_value
 from . import data_location, __version__
 from .data_dialog import DataDirectoryDialog
 from .core import (Store, data_dir, inspect_image, load_image, json_text, fingerprint,
-    unique_path, save_derived, crop_image, stitch_image, tone_restore, EXTENSIONS, file_stamp, resize_image, normalize_category, validate_note, searchable_tags)
+    unique_path, save_derived, crop_image, stitch_image, tone_restore, EXTENSIONS, file_stamp, resize_image, normalize_category, validate_note, searchable_tags,
+    NOTE_IMPORT_CONFIRM, note_json_files, note_import_question, note_import_summary)
 from .vendor.prompt_converter import BMKPromptSyntaxConverter
 from .tagger import Tagger, model_signature, inference_signature
 from .batch import BatchTagJob
@@ -1135,15 +1136,39 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,QMainWindow):
         folder=QFileDialog.getExistingDirectory(self,'노트 JSON 폴더 (하위 폴더 포함)')
         if folder:self.import_note_paths(None,folder)
     def import_note_paths(self,paths,folder=None):
+        # Read and classify first (no writes), confirm large imports, then create only new notes.
         root=self.store.root
-        def work():
+        def scan():
             store=Store(root)
-            try:return store.import_note_files(paths if paths is not None else sorted(Path(folder).rglob('*.json')),folder)
+            try:return store.plan_note_import(paths if paths is not None else note_json_files(folder),folder)
             finally:store.db.close()
+        def planned(plan):
+            if len(plan['import'])>=NOTE_IMPORT_CONFIRM and not self.confirm_note_import(plan):
+                self.statusBar().showMessage(f"노트 가져오기를 취소했습니다. 가져온 노트가 없습니다 (확인한 JSON {plan['scanned']:,}개).");return
+            def work():
+                store=Store(root)
+                try:return store.apply_note_import(plan)
+                finally:store.db.close()
+            self.statusBar().showMessage(f"노트 {len(plan['import']):,}개를 가져오는 중…");self.task(work,done)
         def done(report):
-            self.refresh_notes();self.statusBar().showMessage(f"노트 가져오기: {len(report['imported'])}개 성공 / {len(report['failed'])}개 실패")
-            if report['failed']:self.error(json_text(report['failed']))
-        self.task(work,done)
+            self.refresh_notes();status,message,details=note_import_summary(report)
+            self.statusBar().showMessage(status)
+            if report['skipped'] or report['failed']:self.show_note_import_report(message,details)
+        self.statusBar().showMessage('노트 JSON 파일을 확인하는 중…');self.task(scan,planned)
+    def confirm_note_import(self,plan):
+        box=QMessageBox(self);box.setIcon(QMessageBox.Icon.Question);box.setWindowTitle('많은 노트 가져오기 확인')
+        box.setText(f"노트 {len(plan['import']):,}개를 새로 가져옵니다. 폴더와 개수를 확인하세요.");box.setInformativeText(note_import_question(plan))
+        run=box.addButton('가져오기',QMessageBox.ButtonRole.AcceptRole);cancel=box.addButton('취소',QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(cancel);box.setEscapeButton(cancel);box.exec()
+        return box.clickedButton() is run
+    def show_note_import_report(self,message,details):
+        dialog=QDialog(self);dialog.setWindowTitle('노트 가져오기 결과');layout=QVBoxLayout(dialog)
+        label=QLabel(message);label.setWordWrap(True);label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse);layout.addWidget(label)
+        if details:
+            layout.addWidget(QLabel('파일 목록 (사유별 최대 50개)'))
+            listing=QPlainTextEdit(details);listing.setReadOnly(True);listing.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap);listing.setMinimumSize(680,220);layout.addWidget(listing,1)
+        buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Ok);buttons.button(QDialogButtonBox.StandardButton.Ok).setText('확인')
+        buttons.accepted.connect(dialog.accept);layout.addWidget(buttons);dialog.exec()
     def edit_note_fields(self):
         if not self.note_mode:
             self.statusBar().showMessage('추가 필드는 노트를 열거나 새 노트를 만든 뒤 편집하세요.');return
