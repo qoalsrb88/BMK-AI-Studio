@@ -23,6 +23,7 @@ from pathlib import Path, PurePosixPath
 from .core import NOTE_IMPORT_CONFIRM, NOTE_IMPORT_LOCK, NOTE_IMPORT_MAX_BYTES, normalize_category, note_skip_reason, validate_note
 
 APP_FIELDS = ('schema', 'source', '_studio_category', '_studio_image_transfers')  # app-only keys never written to files
+NODE_FIELDS = ('prompt', 'negative', 'notes', 'loras', 'ui', 'params')  # the only keys the node keeps when it saves
 UNSORTED = '미분류'  # folder for notes without a category; ComfyUI shows only notes inside category folders
 UNTITLED = '제목 없는 노트'
 MAX_ABS_PATH = 240  # same limit as the ComfyUI node
@@ -38,6 +39,7 @@ KIND_REASONS = {
     'deleted': '앱에서 고친 노트의 파일이 폴더에서 사라짐',
     'archived': '앱에서 보관했지만 폴더의 파일이 바뀜',
     'duplicate': '같은 파일 이름이 되는 노트가 앱에 여럿 있음 · 노트 이름을 바꾸면 동기화됩니다',
+    'swap': '다른 노트와 파일 이름을 서로 바꾸는 중 · 한 노트를 다른 이름으로 먼저 바꾼 뒤 다시 바꾸세요',
 }
 RESOLVABLE = ('both', 'occupied', 'deleted', 'archived')
 
@@ -97,8 +99,15 @@ def encode(doc):
 
 
 def merged_body(body, doc):
-    """App body after taking a file's content: the file's fields plus the app's own keys."""
-    return {**doc, **{key: body[key] for key in APP_FIELDS if key in body}}
+    """App body after taking a file's content. The node's own fields follow the file (a cleared LoRA list stays
+    cleared); fields the node drops when it saves (app keys, unknown fields) keep the app's value unless the
+    file has them."""
+    return {**doc, **{key: value for key, value in body.items() if key not in NODE_FIELDS and key not in doc}}
+
+
+def takes_nothing(body, doc):
+    """Whether taking the file would leave the app note as it is."""
+    return doc_hash(file_doc(merged_body(body, doc))) == doc_hash(file_doc(body))
 
 
 def digest(data):
@@ -341,6 +350,12 @@ class NoteFolderSync:
             # A new title that keeps the same file name (e.g. "a:b" and "a_b") is not a move.
             target = note_path(note.title, note.category) if renamed else row['path']
             relocated = target != row['path']
+            if not file_changed and not content_changed and not renamed and entry.rel != row['path']:
+                # Renamed in ComfyUI only by letter case (Windows sees the same file).
+                owner[key] = nid
+                actions.append({'op': 'update', 'note_id': nid, 'path': entry.rel, 'app': note.state(),
+                                'title': title_for(entry.rel, note.title), 'category': category_for(entry.rel, note.category)})
+                continue
             if not file_changed:
                 if relocated:
                     moving.append((note, row, target, content_changed))
@@ -357,39 +372,57 @@ class NoteFolderSync:
             if doc is None:
                 continue
             if not content_changed and not relocated:
-                if doc_hash(doc) == row['doc_hash']:
+                if takes_nothing(note.body, doc):
                     link(note, entry, entry.digest())  # same content saved again
                 else:
                     actions.append({'op': 'update', 'note_id': nid, 'path': entry.rel, 'app': note.state(),
                                     'title': note.title, 'category': note.category})
-            elif doc_hash(doc) == note.hash and not relocated:
+            elif takes_nothing(note.body, doc) and not relocated:
                 link(note, entry, entry.digest())  # both sides made the same change
             else:
                 conflict('both', note, entry.rel)
 
         # 2. Notes renamed or moved to another folder in the app.
-        # Files that another note moves away or sends to .trash this round are taken next round.
-        vacating = {row['path'].casefold() for _, row, _, _ in moving} | {a['path'].casefold() for a in actions if a['op'] == 'trash'}
+        # A file name another note moves away from, sends to .trash or lost in the folder (its link is settled
+        # this round) is taken next round, so two notes never share one file.
+        gone = {row['path'].casefold() for _, row in missing}
+        vacating = {row['path'].casefold() for _, row, _, _ in moving} | {a['path'].casefold() for a in actions if a['op'] == 'trash'} | gone
         for note, row, _, _ in moving:
             owner.setdefault(row['path'].casefold(), note.id)
+        destinations = {row['path'].casefold(): target.casefold() for _, row, target, _ in moving}
 
         def wait(note, rel):
             nonlocal deferred
             deferred += 1
-            problems.append({'title': note.title, 'path': rel, 'reason': '다른 노트가 이 파일 이름에서 옮겨 가는 중 · 다음 동기화에서 씀'})
+            problems.append({'title': note.title, 'path': rel, 'reason': '다른 노트가 쓰던 파일 이름이 비기를 기다림 · 다음 동기화에서 씀'})
+
+        def swapping(key):
+            seen, current = set(), key
+            while current in destinations and current not in seen:
+                seen.add(current)
+                current = destinations[current]
+                if current == key:
+                    return True
+            return False
 
         for note, row, target, content_changed in moving:
             key, tkey = row['path'].casefold(), target.casefold()
             if self.too_long(target):
                 problems.append({'title': note.title, 'path': target, 'reason': f'경로가 {MAX_ABS_PATH}자를 넘어 옮기지 않음 · 이름이나 분류를 줄이세요'})
             elif tkey != key and tkey in vacating:
-                wait(note, target)
+                if swapping(key):
+                    conflict('swap', note, row['path'])
+                else:
+                    wait(note, target)
             elif tkey != key and tkey in owner:
                 conflict('duplicate', note, row['path'])
             elif tkey != key and tkey in files:
                 owner[tkey] = note.id
                 claimed.add(tkey)
-                conflict('occupied', note, files[tkey].rel)
+                if readable(files[tkey]) is None:  # a workflow or other JSON is never replaced
+                    problems.append({'title': note.title, 'path': target, 'reason': '이 이름에 노트가 아닌 파일이 있어 옮기지 않음 · 노트 이름을 바꾸세요'})
+                else:
+                    conflict('occupied', note, files[tkey].rel)
             else:
                 owner[tkey] = note.id
                 actions.append({'op': 'move', 'note_id': note.id, 'old': row['path'], 'path': target, 'file_hash': row['file_hash'],
@@ -431,7 +464,7 @@ class NoteFolderSync:
                 archives += 1
 
         # 4. App notes not linked yet: link to an identical file, write a new file, or report the name clash.
-        leaving = {a['old'].casefold() for a in actions if a['op'] == 'move'} | {a['path'].casefold() for a in actions if a['op'] == 'trash'}
+        leaving = {a['old'].casefold() for a in actions if a['op'] == 'move'} | {a['path'].casefold() for a in actions if a['op'] == 'trash'} | gone
         for note in notes.values():
             if note.id in rows or note.archived:
                 continue
@@ -452,8 +485,9 @@ class NoteFolderSync:
                 entry = files[tkey]
                 doc = readable(entry)
                 if doc is None:
+                    problems.append({'title': note.title, 'path': target, 'reason': '이 이름의 파일을 노트로 읽지 못해 쓰지 않음 · 노트 이름을 바꾸거나 파일을 확인하세요'})
                     continue
-                if doc_hash(doc) == note.hash:
+                if takes_nothing(note.body, doc):
                     link(note, entry, entry.digest())
                 else:
                     conflict('occupied', note, entry.rel)
@@ -527,7 +561,14 @@ class NoteFolderSync:
         with self.db:
             self.put_row(*values)
 
+    def owned(self, rel, nid):
+        """Raise Changed while another note is linked to this file name; one file never belongs to two notes."""
+        key = rel.casefold()
+        if any(path.casefold() == key and other != nid for other, path in self.db.execute('SELECT note_id,path FROM note_sync')):
+            raise Changed()
+
     def _link(self, a, report):
+        self.owned(a['path'], a['note_id'])
         self._commit_row(a['note_id'], a['path'], a['file_hash'], a['doc_hash'], a['title'], a['category'])
         report['linked'] += 1
 
@@ -536,12 +577,14 @@ class NoteFolderSync:
             self.drop_row(a['note_id'])
 
     def _write(self, a, report):
+        self.owned(a['path'], a['note_id'])
         self.write_file(a['path'], a['data'], a['expected'])
         self._commit_row(a['note_id'], a['path'], digest(a['data']), a['doc_hash'], a['title'], a['category'])
         report['written'] += 1
 
     def _move(self, a, report):
         row = self.db.execute('SELECT doc_hash FROM note_sync WHERE note_id=?', (a['note_id'],)).fetchone()
+        self.owned(a['path'], a['note_id'])
         self.move_file(a['old'], a['path'], a['file_hash'])
         file_hash, hashed = a['file_hash'], row[0] if row else a['doc_hash']
         if a['data'] is not None:
@@ -573,6 +616,7 @@ class NoteFolderSync:
             note = self.note(a['note_id'])
             if note is None or note.state() != tuple(a['app']):
                 raise Changed()
+            self.owned(a['path'], note.id)
             body = merged_body(note.body, doc)
             self.put_row(note.id, a['path'], digest(data), doc_hash(file_doc(body)), a['title'], a['category'])
             if body == note.body and (a['title'], a['category']) == (note.title, note.category):
@@ -651,9 +695,12 @@ class NoteFolderSync:
                 handle.write(data)
                 handle.flush()
                 os.fsync(handle.fileno())
-            if self.current_hash(path) != expected:
-                raise Changed()
-            _retry(lambda: os.replace(temp, path))
+            def replace():
+                # Checked again before every attempt: ComfyUI may save while the file is briefly locked.
+                if self.current_hash(path) != expected:
+                    raise Changed()
+                os.replace(temp, path)
+            _retry(replace)
         finally:
             try:
                 temp.unlink()
@@ -663,12 +710,21 @@ class NoteFolderSync:
 
     def move_file(self, old, new, expected):
         source, target = self.abs(old), self.abs(new)
-        if self.current_hash(source) != expected:
-            raise Changed()
-        if target.exists() and not os.path.samefile(source, target):
-            raise Changed()
+
+        def unchanged():
+            if self.current_hash(source) != expected or (target.exists() and not os.path.samefile(source, target)):
+                raise Changed()
+        unchanged()
         self.ensure_dir(target.parent)
-        _retry(lambda: os.rename(source, target))
+
+        def rename():
+            unchanged()
+            os.rename(source, target)
+        try:
+            _retry(rename)
+        except BaseException:
+            self.tidy(target.parent)
+            raise
         mirror, mirror_target = source.with_suffix('.txt'), target.with_suffix('.txt')
         if mirror.exists():
             if mirror_target.exists() and not os.path.samefile(mirror, mirror_target):
@@ -681,9 +737,11 @@ class NoteFolderSync:
     def trash_file(self, rel, expected=None):
         """Move a note file and its .txt mirror to .trash like ComfyUI; expected=None skips the content check."""
         path = self.abs(rel)
-        if expected is not None and self.current_hash(path) != expected:
-            raise Changed()
-        moved = self.to_trash(path)
+
+        def unchanged():
+            if expected is not None and self.current_hash(path) != expected:
+                raise Changed()
+        moved = self.to_trash(path, unchanged)
         mirror = path.with_suffix('.txt')
         if mirror.exists():
             self.to_trash(mirror)
@@ -691,17 +749,22 @@ class NoteFolderSync:
         self.tidy(path.parent)
         return moved
 
-    def to_trash(self, path):
+    def to_trash(self, path, check=None):
         trash = self.root / '.trash'
         trash.mkdir(exist_ok=True)
         base = time.strftime('%Y%m%d_%H%M%S') + '_' + path.name
-        target = trash / base
-        i = 2
-        while target.exists():
-            target = trash / f'{base} ({i})'
-            i += 1
-        _retry(lambda: os.rename(path, target))
-        return target
+
+        def move():
+            if check:
+                check()
+            target = trash / base
+            i = 2
+            while target.exists():
+                target = trash / f'{base} ({i})'
+                i += 1
+            os.rename(path, target)
+            return target
+        return _retry(move)
 
     # ---- conflict resolution ------------------------------------------------------------------------------------
     def resolve(self, nid, path, keep):
@@ -726,11 +789,21 @@ class NoteFolderSync:
             finally:
                 self.store.state(BASE_KEY, {'folder': folder_key(self.root), 'dirs': sorted(self.created)})
 
+    def replaceable(self, rel, own):
+        """Only note files are replaced; the note's own linked file may be broken JSON."""
+        if own and rel.casefold() == own['path'].casefold():
+            return
+        try:
+            self._read_note(rel)
+        except (OSError, ValueError) as exc:
+            raise NoteSyncError(f'{rel}: 노트 파일이 아니어서 바꾸지 않습니다 ({exc}). 노트 이름이나 분류를 바꾸세요.')
+
     def _keep_app(self, note, own, path, others):
         olds = [rel for rel in (path, own['path'] if own else None) if rel]
         if note.archived:
             for rel in dict.fromkeys(olds):
                 if rel.casefold() not in others and self.abs(rel).exists():
+                    self.replaceable(rel, own)
                     self.trash_file(rel)
             with self.db:
                 self.drop_row(note.id)
@@ -738,9 +811,12 @@ class NoteFolderSync:
         target = note_path(note.title, note.category)
         if target.casefold() in others:
             raise NoteSyncError('같은 파일 이름을 쓰는 다른 노트가 있습니다. 노트 이름이나 분류를 바꾸세요.')
-        for rel in dict.fromkeys(olds + [target]):
+        replaced = [rel for rel in dict.fromkeys(olds + [target]) if rel.casefold() not in others and self.abs(rel).exists()]
+        for rel in replaced:
+            self.replaceable(rel, own)  # check every file before moving any
+        for rel in replaced:
             # The replaced files stay recoverable in .trash.
-            if rel.casefold() not in others and self.abs(rel).exists():
+            if self.abs(rel).exists():
                 self.trash_file(rel)
         data = encode(note.doc)
         self.write_file(target, data, None)

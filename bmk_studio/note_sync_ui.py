@@ -19,6 +19,7 @@ DEBOUNCE_MS = 2000  # after an edit; typing a folder name must not leave folders
 POLL_MS = 10000
 BACKUPS = 'note-sync-backups'
 KEEP_BACKUPS = 10
+CURRENT = object()  # note_sync_soon(): the note open in the editor
 
 
 class SyncJob(QThread):
@@ -76,6 +77,7 @@ class NoteSyncMixin:
         self.note_sync_cache = {}
         self.note_sync_conflicts = []
         self.note_sync_problems = []
+        self.note_sync_touched = set()  # notes the app saved while a sync job ran
         self.note_sync_timer = QTimer(self)
         self.note_sync_timer.setSingleShot(True)
         self.note_sync_timer.setInterval(DEBOUNCE_MS)
@@ -168,6 +170,7 @@ class NoteSyncMixin:
         self.note_sync_job = job
         self.note_sync_started = time.monotonic()
         self.jobs.append(job)
+        self.note_sync_touched = set()
 
         def result(value):
             if self.note_sync_job is job:
@@ -195,9 +198,16 @@ class NoteSyncMixin:
         job.start()
         return job
 
-    def note_sync_soon(self):
-        """An app note changed: sync after a short pause so a half-typed name never becomes a folder."""
-        if hasattr(self, 'note_sync_timer') and not self.closed and self.note_sync_enabled():
+    def note_sync_soon(self, nid=CURRENT):
+        """An app note changed (nid, by default the open one): sync after a short pause so a half-typed name
+        never becomes a folder."""
+        if not hasattr(self, 'note_sync_timer'):
+            return
+        nid = self.note_id if nid is CURRENT else nid
+        if self.note_sync_job is not None and nid:
+            # A folder version taken by this job must not silently lose against this save.
+            self.note_sync_touched.add(nid)
+        if not self.closed and self.note_sync_enabled():
             self.note_sync_timer.start()
 
     def flush_note_editor(self):
@@ -362,15 +372,21 @@ class NoteSyncMixin:
                 if record:
                     self.note_tabs.setTabText(index, record[1])
         message = None
-        if self.note_mode and self.note_id in set(report['updated']):
-            if self.note_loaded != (self.note_id, self.note_state()):
-                # Typed while the folder version came in: keep the typing and let the user pick a side.
-                forget_file_base(self.store, self.note_id)
-                self.save_draft()
-                message = '열린 노트가 ComfyUI에서도 바뀌었습니다. 편집 내용을 유지했고 다음 동기화에서 충돌로 표시합니다.'
-            else:
-                self.reload_open_note()
-                message = '열린 노트를 ComfyUI 폴더의 내용으로 다시 읽었습니다. 이전 내용은 버전 이력에 있습니다.'
+        updated = set(report['updated'])
+        raced = updated & self.note_sync_touched
+        self.note_sync_touched = set()
+        if self.note_mode and self.note_id in updated and self.note_loaded != (self.note_id, self.note_state()):
+            raced.add(self.note_id)
+            self.save_draft()  # keep the typing
+        for nid in raced:
+            # Saved in the app while the folder version came in: the next sync shows both as a conflict.
+            forget_file_base(self.store, nid)
+        if raced:
+            message = 'ComfyUI에서 바뀐 노트를 앱에서도 고쳤습니다. 편집 내용을 유지했고 다음 동기화에서 충돌로 표시합니다.'
+            self.note_sync_soon(None)
+        elif self.note_mode and self.note_id in updated:
+            self.reload_open_note()
+            message = '열린 노트를 ComfyUI 폴더의 내용으로 다시 읽었습니다. 이전 내용은 버전 이력에 있습니다.'
         elif self.note_mode and self.note_id in set(report['archived']):
             message = '열린 노트의 파일이 ComfyUI 폴더에서 사라져 노트를 보관함으로 옮겼습니다. 내용과 이력은 남습니다.'
         summary = report_summary(report)
@@ -421,6 +437,10 @@ class NoteSyncMixin:
     def stop_note_sync(self):
         self.note_sync_timer.stop()
         self.note_sync_poll.stop()
+
+    def resume_note_sync(self):
+        if self.note_sync_enabled() and not self.closing_requested:
+            self.note_sync_poll.start()
 
     def changeEvent(self, event):
         super().changeEvent(event)

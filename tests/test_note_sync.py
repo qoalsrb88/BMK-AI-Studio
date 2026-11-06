@@ -156,4 +156,69 @@ class NoteSyncTests(unittest.TestCase):
         self.assertTrue(engine.fresh());plan=engine.plan();self.assertEqual(plan['counts'],{'write':1});engine.apply(plan)
         self.assertTrue((other/'c'/'n.json').exists());self.assertEqual(self.store.state(BASE_KEY)['folder'],os.path.normcase(os.path.abspath(other)))
 
+    # Regressions found in the cross review.
+    def linked(self,*specs):
+        ids=[self.store.save_note(title,{'prompt':title,'negative':'','notes':''},category='c') for title in specs]
+        self.sync();return ids
+    def rows(self):return sorted(r[1].casefold() for r in self.store.db.execute('SELECT note_id,path FROM note_sync'))
+
+    def test_a_deleted_file_name_is_not_taken_before_its_link_is_settled(self):
+        a,b=self.linked('a','b')
+        (self.folder/'c'/'b.json').unlink();self.store.save_note('b',self.body(a),a,'c')  # ComfyUI deletes b; the app renames a to b
+        plan,report=self.sync();self.assertEqual(report['archived'],[b]);self.assertEqual(report['moved'],0)
+        self.assertEqual(len(self.rows()),len(set(self.rows())))
+        plan,report=self.sync();self.assertEqual(report['moved'],1);self.assertEqual(self.rows(),['c/b.json'])
+        self.assertEqual(self.body(b)['prompt'],'b');self.assertEqual(self.file('c/b.json')['prompt'],'a');self.assert_quiet()
+
+    def test_replace_retry_checks_the_file_again(self):
+        nid,=self.linked('a');self.store.save_note('a',{'prompt':'app','negative':'','notes':''},nid,'c')
+        import bmk_studio.note_sync as module
+        real=module.os.replace;calls=[]
+        def locked(src,dst):
+            calls.append(dst)
+            if len(calls)==1:
+                node_write(Path(dst),{**COMFY,'prompt':'saved by comfy meanwhile'});raise PermissionError('in use')
+            return real(src,dst)
+        with unittest.mock.patch.object(module.os,'replace',locked):plan,report=self.sync()
+        self.assertEqual((report['written'],report['skipped']),(0,1));self.assertEqual(len(calls),1)
+        self.assertEqual(self.file('c/a.json')['prompt'],'saved by comfy meanwhile')
+
+    def test_fields_the_node_drops_stay_in_the_app(self):
+        nid=self.store.save_note('a',{'schema':1,'prompt':'p','negative':'','notes':'','loras':[{'name':'x'}],'future':{'kept':1}},category='c');self.sync()
+        self.assertEqual(self.file('c/a.json')['future'],{'kept':1})
+        node_write(self.folder/'c'/'a.json',{'prompt':'comfy','negative':'','loras':[],'notes':''})  # the node keeps its 6 keys only
+        plan,report=self.sync();self.assertEqual(report['updated'],[nid])
+        body=self.body(nid);self.assertEqual((body['prompt'],body['loras'],body['future'],body['schema']),('comfy',[],{'kept':1},1))
+        self.assert_quiet()
+        # First connect: an app note with extra fields links to the same file without a conflict.
+        other=self.root/'other';node_write(other/'c'/'a.json',{'prompt':'comfy','negative':'','loras':[],'notes':''})
+        plan=NoteFolderSync(self.store,other).plan();self.assertEqual(plan['counts'],{'link':1});self.assertEqual(plan['conflicts'],[])
+
+    def test_other_json_is_never_replaced(self):
+        nid,=self.linked('a');workflow=self.folder/'c'/'workflow.json';workflow.write_text('{"nodes":[],"links":[]}',encoding='utf-8')
+        self.store.save_note('workflow',self.body(nid),nid,'c');plan,report=self.sync()
+        self.assertEqual(report['conflicts'],[]);self.assertTrue(any('노트가 아닌' in p['reason'] for p in report['problems']))
+        self.assertEqual(workflow.read_text(encoding='utf-8'),'{"nodes":[],"links":[]}');self.assertTrue((self.folder/'c'/'a.json').exists())
+        self.assertRaises(NoteSyncError,self.engine().resolve,nid,'c/workflow.json','app')
+        self.assertEqual(workflow.read_text(encoding='utf-8'),'{"nodes":[],"links":[]}')
+        fresh=self.store.save_note('workflow',{'prompt':'new','negative':'','notes':''},category='c');plan,report=self.sync()
+        self.assertTrue(any(p['title']=='workflow' for p in report['problems']));self.assertEqual(workflow.read_text(encoding='utf-8'),'{"nodes":[],"links":[]}')
+
+    def test_swapped_names_are_reported_not_left_waiting(self):
+        a,b=self.linked('a','b')
+        self.store.save_note('b',self.body(a),a,'c');self.store.save_note('a',self.body(b),b,'c')
+        plan,report=self.sync();self.assertEqual(sorted(c['kind'] for c in report['conflicts']),['swap','swap'])
+        self.assertEqual((self.file('c/a.json')['prompt'],self.file('c/b.json')['prompt']),('a','b'))
+        self.store.save_note('tmp',self.body(a),a,'c');self.sync();self.store.save_note('b',self.body(a),a,'c');self.sync();self.sync()
+        self.assertEqual((self.file('c/a.json')['prompt'],self.file('c/b.json')['prompt']),('b','a'));self.assert_quiet()
+
+    def test_case_only_rename_in_comfy_reaches_the_app(self):
+        nid,=self.linked('hero');os.rename(self.folder/'c'/'hero.json',self.folder/'c'/'Hero.json')
+        self.assertEqual(os.listdir(self.folder/'c'),['Hero.json'])
+        if os.path.normcase('A')=='a':  # Windows: the old link still finds the file, only the spelling changed
+            plan,report=self.sync();self.assertEqual(report['updated'],[nid]);self.assertEqual(self.store.note(nid)[1],'Hero')
+            self.assertEqual(self.rows(),['c/hero.json']);self.assertEqual(self.store.db.execute('SELECT path FROM note_sync').fetchone()[0],'c/Hero.json')
+            self.assert_quiet()
+
+import unittest.mock
 if __name__=='__main__':unittest.main()

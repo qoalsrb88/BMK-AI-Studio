@@ -42,7 +42,7 @@ py -3.12 -m venv .venv
 
 ## 검증과 제한
 
-현재 소스 검사는 폴더 복사·업로드 제외 정책·배포 패키지 검사를 포함해 단위 테스트 151개, Qt 검사 28개입니다. 실행 파일의 GPU·압축 해제 검증 범위는 각 Release 안내에 기록합니다. [GitHub Actions 검사 결과](https://github.com/qoalsrb88/BMK-AI-Studio/actions/workflows/windows-tests.yml)는 각 커밋에서 확인할 수 있습니다. CI는 CPU·합성 데이터를 사용하며 실제 GPU/로컬 모델 검사는 별도입니다. 검증 결과가 모든 PC에서의 호환성을 보장하지는 않습니다.
+현재 소스 검사는 폴더 복사·업로드 제외 정책·배포 패키지 검사를 포함해 단위 테스트 157개, Qt 검사 28개입니다. 실행 파일의 GPU·압축 해제 검증 범위는 각 Release 안내에 기록합니다. [GitHub Actions 검사 결과](https://github.com/qoalsrb88/BMK-AI-Studio/actions/workflows/windows-tests.yml)는 각 커밋에서 확인할 수 있습니다. CI는 CPU·합성 데이터를 사용하며 실제 GPU/로컬 모델 검사는 별도입니다. 검증 결과가 모든 PC에서의 호환성을 보장하지는 않습니다.
 
 설정 → 업데이트에서 로그인 없이 새 버전을 확인하고 GitHub 배포 페이지를 엽니다. 새 ZIP을 새 폴더에 풀고 기존 앱을 종료한 뒤 실행하는 수동 업데이트 방식입니다. 유료 서명과 자동 설치는 현재 배포 범위에 포함하지 않습니다. 이전 비공개 로그인·서명 업데이트 코드는 개발 참고용으로만 남겨두며 공개 앱 화면과 실행 진입점에는 연결하지 않습니다. Windows HTTPS는 Schannel을 사용합니다. PixAI 연동은 보류합니다. 자세한 이력은 [배포 개선 기록](docs/DISTRIBUTION_PROGRESS.md)을 참고하세요. 의미 검색은 프롬프트/태그 텍스트 대상이며 이미지 픽셀 CLIP 검색이 아닙니다. 파일 탐색에는 원본 삭제·이동 기능이 없습니다. 기록되지 않은 생성 프롬프트나 실제 실행 분기를 추측하지 않습니다.
 

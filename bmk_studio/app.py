@@ -343,11 +343,12 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         if data_location.session_directory or os.environ.get('BMK_STUDIO_DATA','').strip():return False
         if self.jobs:
             self.error('폴더 감시·태깅·다운로드 등 진행 중인 작업을 마친 뒤 데이터 폴더를 변경하세요.');return False
+        self.stop_note_sync()  # no note folder sync may start while the data folder is chosen and copied
         dialog=DataDirectoryDialog(self.store.root,self)
-        if dialog.exec()!=QDialog.DialogCode.Accepted:return False
+        if dialog.exec()!=QDialog.DialogCode.Accepted:self.resume_note_sync();return False
         if self.jobs:
-            self.error('폴더 선택 중 시작된 백그라운드 작업이 있습니다. 완료 또는 취소 후 다시 변경하세요.');return False
-        self.autosave.stop();self.recovery_timer.stop();self.stop_note_sync();self.library.stop_search();self.disk_browser.set_active(False)
+            self.resume_note_sync();self.error('폴더 선택 중 시작된 백그라운드 작업이 있습니다. 완료 또는 취소 후 다시 변경하세요.');return False
+        self.autosave.stop();self.recovery_timer.stop();self.library.stop_search();self.disk_browser.set_active(False)
         success=False
         try:
             self.save_draft();self.save_documents();self.save_window_state();self.save_queue()
@@ -361,8 +362,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         finally:
             if not success:
                 self.recovery_timer.start();self.library.resume_search();self.disk_browser.set_active(self.workspace_mode.currentData()=='disk')
-                self.autosave.start()
-                if self.note_sync_enabled():self.note_sync_poll.start()
+                self.autosave.start();self.resume_note_sync()
 
     def build(self):
         host = QWidget()
@@ -893,15 +893,15 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         for i in range(1,self.note_tabs.count()):
             # Renaming is an edit, so a previewed note keeps its tab like any other change.
             if self.note_tabs.tabData(i).get('id')==nid:self.note_tabs.setTabText(i,title);self.promote_preview(i)
-        self.refresh_notes();self.note_sync_soon()
+        self.refresh_notes();self.note_sync_soon(nid)
     def duplicate_tree_note(self,nid):
         self.save_draft();record=self.store.note(nid)
         if not record:return
-        duplicate=self.store.save_note(record[1]+' 사본',json.loads(record[2]),None,record[3]);self.refresh_notes();self.note_sync_soon();self.open_note_id(duplicate)
+        duplicate=self.store.save_note(record[1]+' 사본',json.loads(record[2]),None,record[3]);self.refresh_notes();self.note_sync_soon(None);self.open_note_id(duplicate)
     def archive_tree_note(self,nid):
         self.save_draft();record=self.store.note(nid)
         if not record:return
-        self.store.archive_note(nid,not record[4]);self.refresh_notes();self.note_sync_soon()
+        self.store.archive_note(nid,not record[4]);self.refresh_notes();self.note_sync_soon(nid)
         self.statusBar().showMessage('노트를 복구했습니다.' if record[4] else '노트를 보관함으로 옮겼습니다. 내용과 이력은 유지됩니다.')
     def tree_note_action(self,nid,fn):
         self.open_note_id(nid);fn()
@@ -1128,7 +1128,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         self.save_draft();nid=self.note_id
         self.store.restore_revision(nid,revision_id)
         # Avoid saving the obsolete editor over the restored record on navigation.
-        self.open_note_id(nid,save=False);self.refresh_notes();self.note_sync_soon();self.statusBar().showMessage('선택 버전을 새 이력으로 복원했습니다.')
+        self.open_note_id(nid,save=False);self.refresh_notes();self.note_sync_soon(nid);self.statusBar().showMessage('선택 버전을 새 이력으로 복원했습니다.')
     def archive_current_note(self):
         self.save_draft()
         if not self.note_id:self.statusBar().showMessage('먼저 노트를 선택하세요.');return
@@ -1156,7 +1156,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
                 finally:store.db.close()
             self.statusBar().showMessage(f"노트 {len(plan['import']):,}개를 가져오는 중…");self.task(work,done)
         def done(report):
-            self.refresh_notes();self.note_sync_soon();status,message,details=note_import_summary(report)
+            self.refresh_notes();self.note_sync_soon(None);status,message,details=note_import_summary(report)
             self.statusBar().showMessage(status)
             if report['skipped'] or report['failed']:self.show_note_import_report(message,details)
         self.statusBar().showMessage('노트 JSON 파일을 확인하는 중…');self.task(scan,planned)
