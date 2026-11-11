@@ -1,6 +1,6 @@
 # BMK AI Studio
 
-Windows용 독립 이미지·프롬프트 작업실. 현재 버전 **0.9.17**, Windows 베타입니다. 소스와 실행 파일을 무료로 공개하는 개인용 유틸리티입니다. ComfyUI 서버 없이 실행하며 사용자 원본 이미지를 덮어쓰지 않습니다.
+Windows용 독립 이미지·프롬프트 작업실. 현재 버전 **0.9.18**, Windows 베타입니다. 소스와 실행 파일을 무료로 공개하는 개인용 유틸리티입니다. ComfyUI 서버 없이 실행하며 사용자 원본 이미지를 덮어쓰지 않습니다.
 
 ## 기능
 
@@ -15,7 +15,7 @@ Windows용 독립 이미지·프롬프트 작업실. 현재 버전 **0.9.17**, W
 
 ## 다운로드하고 실행
 
-1. [GitHub 배포 페이지](https://github.com/qoalsrb88/BMK-AI-Studio/releases)에서 **0.9.17 CPU 또는 NVIDIA ZIP**을 받습니다. GPU가 없거나 가볍게 시작하려면 CPU판을 선택하세요. NVIDIA판은 호환 드라이버가 필요합니다.
+1. [GitHub 배포 페이지](https://github.com/qoalsrb88/BMK-AI-Studio/releases)에서 **0.9.18 CPU 또는 NVIDIA ZIP**을 받습니다. GPU가 없거나 가볍게 시작하려면 CPU판을 선택하세요. NVIDIA판은 호환 드라이버가 필요합니다.
 2. ZIP 전체를 새 폴더에 압축 해제합니다.
 3. `BMK-AI-Studio.exe`를 실행합니다. `_internal`을 포함한 폴더 전체를 함께 보관하세요.
 
