@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
 from . import shell_actions
 from .workspace import WorkspaceMixin, bar, PANES, SIDEBAR_WIDTH
 from .discovery_ui import DiscoveryMixin
-from .appearance import apply_theme, decorate, icon, ghost, caption, tokens, ElidedLabel, CANVAS, CANVAS_TEXT
+from .appearance import apply_theme, decorate, icon, ghost, caption, tokens, on_grid, ElidedLabel, CANVAS, CANVAS_TEXT, CONTROL
 from .hints import HintListWidget
 from .background import JobCenter
 from .prompt_highlight import PromptEdit, refresh_all as refresh_highlighting
@@ -57,11 +57,10 @@ def configure_app(app):
     app.setStyle('Fusion');apply_theme(app)
 
 def button(text, fn, primary=False):
+    """Text button. Icons are not guessed from the label: a caller that wants one calls decorate() itself."""
     b = QPushButton(text)
     b.setProperty('primary',primary)
     b.clicked.connect(fn)
-    for word,name in [('복사','copy'),('폴더','folder'),('이미지','image'),('노트','note'),('태깅','tag'),('실행 취소','undo'),('내보내기','save'),('보관','save')]:
-        if word in text:decorate(b,name);break
     return b
 
 def row(*widgets):
@@ -267,7 +266,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
 
     def prompt_header(self,label,editor):
         copy=button('',lambda:self.copy_text(editor.toPlainText()));decorate(copy,'copy');ghost(copy)
-        copy.setFixedSize(30,30);copy.setToolTip(label+' 전체 복사');copy.setAccessibleName(label+' 전체 복사')
+        copy.setFixedSize(CONTROL,CONTROL);copy.setToolTip(label+' 전체 복사');copy.setAccessibleName(label+' 전체 복사')
         copy.setEnabled(bool(editor.toPlainText()))
         editor.textChanged.connect(lambda:copy.setEnabled(bool(editor.toPlainText())))
         return row(caption(label,'field'),copy)
@@ -346,6 +345,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
             dialog.accept()
         controls.accepted.connect(accept_settings);controls.rejected.connect(dialog.reject);outer.addWidget(controls)
         dialog.resize(580,min(page.sizeHint().height()+controls.sizeHint().height()+48,self.screen().availableGeometry().height()-80))
+        on_grid(dialog)
         if dialog.exec()==QDialog.DialogCode.Accepted:
             self.appearance.update(theme=theme.currentData(),interpolation=interpolation.currentData(),overscroll=margin.value())
             self.appearance['auto_checkpoint']=recovery.isChecked()
@@ -381,12 +381,12 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
     def build(self):
         host = QWidget()
         outer = QVBoxLayout(host)
-        outer.setContentsMargins(12,8,12,6);outer.setSpacing(8)
-        title = QLabel('BMK  /  AI STUDIO')
+        outer.setContentsMargins(12,8,12,8);outer.setSpacing(8)
+        title = QLabel('BMK AI Studio')
         title.setObjectName('brand')
         self.workspace_mode=QComboBox();self.workspace_mode.addItem('탐색 · 갤러리','browse');self.workspace_mode.addItem('작업 · 미리보기','work');self.workspace_mode.addItem('폴더 탐색','disk')
         self.workspace_mode.setAccessibleName('화면 모드');self.workspace_mode.currentIndexChanged.connect(self.switch_workspace)
-        self.settings_button=button('',self.open_settings);decorate(self.settings_button,'settings');ghost(self.settings_button);self.settings_button.setFixedSize(34,34)
+        self.settings_button=button('',self.open_settings);decorate(self.settings_button,'settings');ghost(self.settings_button);self.settings_button.setFixedSize(CONTROL,CONTROL)
         self.settings_button.setToolTip('전역 설정 · 테마 / 미리보기');self.settings_button.setAccessibleName('전역 설정')
         # One header row: brand, main navigation (inserted by build_main_tabs), then natural-width global actions.
         header=QFrame();header.setObjectName('header');self.header_layout=QHBoxLayout(header);self.header_layout.setContentsMargins(0,0,0,8);self.header_layout.setSpacing(8)
@@ -415,7 +415,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         self.thumbnail_slider.valueChanged.connect(self.resize_thumbnails)
         manage=self.add_section(ll,'manage','목록 관리')
         manage.add(button('선택 항목을 목록에서 제거',self.remove_library_selection))
-        self.restore_removed_button=button('목록 제거 되돌리기',self.undo_library_removal);self.restore_removed_button.setEnabled(False);decorate(self.restore_removed_button,'undo');manage.add(self.restore_removed_button)
+        self.restore_removed_button=button('목록 제거 되돌리기',self.undo_library_removal);self.restore_removed_button.setEnabled(False);manage.add(self.restore_removed_button)
         self.watch_toggle=QCheckBox('열어 둔 폴더의 새 이미지 자동 수집')
         self.watch_toggle.toggled.connect(self.toggle_watch);manage.add(self.watch_toggle)
         self.library_status=caption('폴더를 열면 감시를 켤 수 있습니다.');self.library_status.setWordWrap(True);manage.add(self.library_status);ll.addStretch(1)
@@ -441,14 +441,14 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         sidebar=QScrollArea();sidebar.setWidgetResizable(True);sidebar.setWidget(left);self.sidebar=sidebar;splitter.addWidget(sidebar)
         # Wide enough for the widest row plus the vertical bar, so opening a section never brings a horizontal bar.
         sidebar.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff);sidebar.setMinimumWidth(SIDEBAR_WIDTH)
-        center_host=QWidget();center_layout=QVBoxLayout(center_host);center_layout.setContentsMargins(6,0,6,0)
+        center_host=QWidget();center_layout=QVBoxLayout(center_host);center_layout.setContentsMargins(4,0,4,0)
         self.selection_label=caption('선택 0개');self.browser_count=QLabel('0개')
         self.selection_actions=button('선택 작업',self.selection_menu)
         self.sort_order=QComboBox();self.sort_order.addItems(['추가 순서','파일명 ↑','파일명 ↓']);self.sort_order.setToolTip('정렬')
         self.sort_order.currentIndexChanged.connect(lambda i:self.library.proxy.sort(-1 if i==0 else 0,Qt.SortOrder.DescendingOrder if i==2 else Qt.SortOrder.AscendingOrder))
         self.pin_button=button('A 고정',self.pin_compare);self.pin_button.setToolTip('현재 이미지를 비교 기준 A로 고정')
         self.compare_button=button('A/B 비교',self.compare_selection)
-        self.inspector_toggle=QPushButton();self.inspector_toggle.setCheckable(True);self.inspector_toggle.setChecked(True);ghost(self.inspector_toggle);decorate(self.inspector_toggle,'info');self.inspector_toggle.setFixedSize(32,32)
+        self.inspector_toggle=QPushButton();self.inspector_toggle.setCheckable(True);self.inspector_toggle.setChecked(True);ghost(self.inspector_toggle);decorate(self.inspector_toggle,'info');self.inspector_toggle.setFixedSize(CONTROL,CONTROL)
         self.inspector_toggle.setToolTip('정보 패널 표시 / 숨기기');self.inspector_toggle.setAccessibleName('정보 패널')
         self.inspector_toggle.toggled.connect(lambda on:self.tabs.setVisible(on))
         # Toolbar: view-mode tabs (inserted by build_main_tabs), then actions. Counts and view options sit in the footer
@@ -464,7 +464,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         self.viewer.zoomChanged.connect(lambda z:self.zoom_label.setText(f'{z*100:.0f}%' if z>0 else '—'))
         self.viewer.interpolationChanged.connect(self.save_interpolation)
         fit=button('',self.viewer.fit);decorate(fit,'fit');undo=button('',self.undo);decorate(undo,'undo')
-        for item,label in ((fit,'화면 맞춤'),(undo,'실행 취소')):ghost(item);item.setFixedSize(32,32);item.setToolTip(label);item.setAccessibleName(label)
+        for item,label in ((fit,'화면 맞춤'),(undo,'실행 취소')):ghost(item);item.setFixedSize(CONTROL,CONTROL);item.setToolTip(label);item.setAccessibleName(label)
         self.viewer_more=QPushButton('더 보기');self.viewer_more.setToolTip('보기 / 복사 / 보관');self.viewer_more.setMenu(self.viewer_menu(self.viewer_more))
         actual=ghost(button('1:1',self.viewer.actual_size));actual.setToolTip('실제 크기 (100%)');actual.setAccessibleName('실제 크기 (100%)')
         cl.addWidget(bar(fit,actual,self.zoom_label,None,undo,self.viewer_more,button('작업본 내보내기',self.export_image,True)))
@@ -520,7 +520,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         wl.addWidget(bar(self.conversion,button('문법 변환',self.convert),None,self.prompt_tools))
         self.note_save_button=button('노트 저장',self.save_note,True)
         self.note_history_button=button('버전 이력',self.note_history);self.note_history_button.setToolTip('버전 이력 / 복원')
-        self.note_archive_button=button('보관 / 복구',self.archive_current_note)
+        self.note_archive_button=button('보관',self.archive_current_note)  # show_archive_action names what the click does
         self.note_more=QPushButton('더 보기');more=QMenu(self.note_more);more.addAction('JSON 내보내기',self.export_note);more.addAction('BMK 추가 필드',self.edit_note_fields);more.addAction('전체 JSON 편집',self.edit_note_json);self.note_more.setMenu(more)
         self.image_note_save=button('노트에 저장…',self.save_image_to_note)
         self.note_actions=bar(self.image_note_save,None,self.note_history_button,self.note_archive_button,self.note_more,self.note_save_button);wl.addWidget(self.note_actions)
@@ -635,6 +635,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         self.disk_browser=DiskBrowser(self,Viewer);self.disk_browser.hide();outer.addWidget(self.disk_browser,1)
         self.build_main_tabs(outer)
         self.disk_browser.side_layout.addWidget(button('프롬프트를 노트에 저장…',lambda:self.save_image_to_note(True)))
+        on_grid(host)
         self.setCentralWidget(host)
         self.autosave=QTimer(self);self.autosave.setSingleShot(True);self.autosave.setInterval(600);self.autosave.timeout.connect(self.save_draft)
         for editor in (self.draft,self.draft_negative,self.memo): editor.textChanged.connect(lambda:self.autosave.start() if not self.loading else None)
@@ -1122,7 +1123,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
                 self.open_note_id(data['id'],save=False,preview=bool(data.get('preview')));return
             self.loading=True;self.note_id=None;self.note_extra={'source':None};self.note_mode=True
             self.note_title.clear();self.note_category.setCurrentText('');self.draft.clear();self.draft_negative.clear();self.memo.clear()
-            self.loading=False;self.select_document(index);return
+            self.loading=False;self.select_document(index);self.show_archive_action();return
         self.loading=True;self.note_mode=False;self.note_id=None;self.note_extra={}
         saved=self.store.asset(self.path) if self.path else None
         self.note_title.setText(self.path.stem if self.path else '');self.note_category.setCurrentText('')
@@ -1225,14 +1226,14 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         self.note_id=record[0];doc=json.loads(record[2]);self.note_mode=True
         self.note_extra=doc.copy()
         self.note_title.setText(record[1]);self.note_category.setCurrentText(record[3]);self.draft.setPlainText(doc.get('prompt',''));self.draft_negative.setPlainText(doc.get('negative',''));self.memo.setPlainText(doc.get('notes',''))
-        self.note_loaded=(self.note_id,self.note_state())
+        self.note_loaded=(self.note_id,self.note_state());self.show_archive_action(record)
         self.loading=False;self.tabs.setCurrentIndex(1)
         self.attach_note_tab(nid,record[1],preview)
         if hasattr(self,'main_tabs') and not self.main_switching:self.main_tabs.setCurrentIndex(2)
     def new_note(self):
         self.save_draft();self.loading=True;self.note_id=None;self.note_extra={'source':None};self.note_mode=True
         self.note_title.clear();self.draft.clear();self.draft_negative.clear();self.memo.clear()
-        self.note_category.setCurrentText('');self.attach_note_tab(None,'새 노트')
+        self.note_category.setCurrentText('');self.attach_note_tab(None,'새 노트');self.show_archive_action()
         self.loading=False;self.tabs.setCurrentIndex(1);self.note_title.setFocus()
         if hasattr(self,'main_tabs') and not self.main_switching:self.main_tabs.setCurrentIndex(2)
     def note_history(self):
@@ -1245,10 +1246,14 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         self.store.restore_revision(nid,revision_id)
         # Avoid saving the obsolete editor over the restored record on navigation.
         self.open_note_id(nid,save=False);self.refresh_notes();self.note_sync_soon(nid);self.statusBar().showMessage('선택 버전을 새 이력으로 복원했습니다.')
+    def show_archive_action(self,record=None):
+        """The archive button names what a click does to the open note: move it to the archive, or bring it back."""
+        archived=bool(record and record[4]);self.note_archive_button.setText('복구' if archived else '보관')
+        self.note_archive_button.setToolTip('보관함에서 복구' if archived else '보관함으로 옮기기 · 내용과 이력은 유지됩니다')
     def archive_current_note(self):
         self.save_draft()
         if not self.note_id:self.statusBar().showMessage('먼저 노트를 선택하세요.');return
-        record=self.store.note(self.note_id);self.store.archive_note(self.note_id,not record[4]);self.refresh_notes();self.note_sync_soon()
+        record=self.store.note(self.note_id);self.store.archive_note(self.note_id,not record[4]);self.refresh_notes();self.note_sync_soon();self.show_archive_action(self.store.note(self.note_id))
         self.statusBar().showMessage('노트를 복구했습니다.' if record[4] else '노트를 보관함으로 옮겼습니다. 내용과 이력은 유지됩니다.')
     def import_notes(self):
         paths,_=QFileDialog.getOpenFileNames(self,'BMK 노트 JSON 가져오기','','JSON (*.json)')

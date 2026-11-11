@@ -9,11 +9,11 @@ class Section(QWidget):
 
     def __init__(self, key, title, expanded=True):
         super().__init__(); self.key = key; self.default = expanded
-        layout = QVBoxLayout(self); layout.setContentsMargins(0, 0, 0, 0); layout.setSpacing(6)
+        layout = QVBoxLayout(self); layout.setContentsMargins(0, 8, 0, 0); layout.setSpacing(4)  # a title sits closer to its own rows than to the section above
         self.header = QPushButton(title); self.header.setCheckable(True); self.header.setChecked(expanded)
         self.header.setProperty('role', 'section'); self.header.setCursor(Qt.CursorShape.PointingHandCursor)
         self.header.setAccessibleName(title + ' 섹션 접기 / 펼치기')
-        self.body = QWidget(); self.body_layout = QVBoxLayout(self.body); self.body_layout.setContentsMargins(0, 0, 0, 0); self.body_layout.setSpacing(6)
+        self.body = QWidget(); self.body_layout = QVBoxLayout(self.body); self.body_layout.setContentsMargins(0, 0, 0, 0); self.body_layout.setSpacing(8)
         layout.addWidget(self.header); layout.addWidget(self.body)
         self.header.toggled.connect(self._apply); self._apply(expanded)
 

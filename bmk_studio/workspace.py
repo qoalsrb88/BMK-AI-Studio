@@ -20,7 +20,7 @@ def action(text,callback):
 
 def bar(*items):
     """Toolbar row: widgets keep their natural width; None inserts a stretch; (widget, n) gives that widget stretch n."""
-    host=QWidget();layout=QHBoxLayout(host);layout.setContentsMargins(0,0,0,0);layout.setSpacing(6)
+    host=QWidget();layout=QHBoxLayout(host);layout.setContentsMargins(0,0,0,0);layout.setSpacing(8)
     for item in items:
         if item is None:layout.addStretch(1)
         elif isinstance(item,tuple):layout.addWidget(item[0],item[1])
@@ -359,7 +359,11 @@ class WorkspaceMixin:
             if not text:return
             from .app import replace_text
             existing=self.draft.toPlainText();replace_text(self.draft,text if replace else existing+('\n' if existing else '')+text);dialog.accept()
-        search.textChanged.connect(populate);items.currentItemChanged.connect(lambda *args:preview.setPlainText(selected()));populate()
-        layout.addWidget(line(action('고정 / 해제',pin),action('현재 프롬프트에 추가',use),action('현재 프롬프트 교체',lambda:use(True))))
+        pin_button=action('고정',pin)
+        def show_pin():
+            # The button names what a click does to the selected note.
+            item=items.currentItem();pin_button.setEnabled(bool(item));pin_button.setText('고정 해제' if item and item.data(Qt.ItemDataRole.UserRole) in pins else '고정')
+        search.textChanged.connect(populate);items.currentItemChanged.connect(lambda *args:(preview.setPlainText(selected()),show_pin()));populate();show_pin()
+        layout.addWidget(line(pin_button,action('현재 프롬프트에 추가',use),action('현재 프롬프트 교체',lambda:use(True))))
         layout.addWidget(QLabel('현재 열린 작업/노트에 적용 · 원문 문법 유지 · Ctrl+Z로 되돌리기'))
         buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Close);buttons.rejected.connect(dialog.reject);layout.addWidget(buttons);dialog.exec()

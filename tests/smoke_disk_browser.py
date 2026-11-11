@@ -110,9 +110,9 @@ def favorite_present(path):
 popup(d.view,index('child'),'즐겨찾는 경로에 추가');assert favorite_present(str(folder/'child'))==(True,True)
 assert labels(popup(d.view,index('child')))[1]=='즐겨찾는 경로에서 제거'
 popup(d.view,index('child'),'즐겨찾는 경로에서 제거');assert favorite_present(str(folder/'child'))==(False,False)
-favorite_button=d.favorite_button;assert favorite_button.text()=='경로 저장 / 해제'
-favorite_button.click();assert favorite_present(str(folder))==(False,False)
-favorite_button.click();assert favorite_present(str(folder))==(True,True)
+favorite_button=d.favorite_button;assert favorite_button.accessibleName()=='현재 폴더 즐겨찾기' and favorite_button.isChecked()
+favorite_button.click();assert favorite_present(str(folder))==(False,False) and not favorite_button.isChecked()
+favorite_button.click();assert favorite_present(str(folder))==(True,True) and favorite_button.isChecked()
 popup(d.view,choose='즐겨찾는 경로에서 제거');assert favorite_present(str(folder))==(False,False)
 popup(d.view,choose='즐겨찾는 경로에 추가');assert favorite_present(str(folder))==(True,True)
 # Tree and quick-list right clicks never emit the left-click navigation signal.

@@ -10,7 +10,7 @@ class Flow(QWidget):
     reports heightForWidth: inside a resizable QScrollArea that would make the page as tall as every editor's
     preferred height instead of the viewport.
     """
-    def __init__(self, spacing=6):
+    def __init__(self, spacing=8):
         super().__init__(); self.gap = spacing; self.widgets = []
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
 

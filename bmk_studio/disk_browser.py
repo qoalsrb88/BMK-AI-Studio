@@ -76,7 +76,9 @@ class DiskBrowser(QWidget):
         self.favorites=QComboBox();self.favorites.setMinimumContentsLength(12);self.favorites.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon);self.favorites.setMaximumWidth(240);self.refresh_favorites();self.favorites.activated.connect(lambda i:self.navigate(self.favorites.itemData(i)) if i else None)
         self.search=QLineEdit();self.search.setPlaceholderText('현재 폴더의 이름 검색 · 하위 폴더 제외');self.sort=QComboBox();self.sort.addItems(['이름 ↑','이름 ↓','수정일 ↑','수정일 ↓','크기 ↑','크기 ↓'])
         self.add=action('선택 이미지를 라이브러리에 추가',self.add_selected);self.add.setProperty('primary',True);self.add.setEnabled(False)
-        self.favorite_button=action('경로 저장 / 해제',lambda:self.toggle_favorite());decorate(self.favorite_button,'star');self.favorite_button.setToolTip('현재 폴더를 즐겨찾는 경로에 넣거나 뺍니다')
+        # A star beside the favourites list; it stays pressed while the open folder is one of them (sync_favorite).
+        self.favorite_button=action('',lambda:(self.toggle_favorite(),self.sync_favorite()));decorate(self.favorite_button,'star');ghost(self.favorite_button)
+        self.favorite_button.setFixedSize(32,32);self.favorite_button.setCheckable(True);self.favorite_button.setAccessibleName('현재 폴더 즐겨찾기')
         layout.addWidget(bar(self.favorites,self.favorite_button,(self.search,1),self.sort,self.add))
         self.split=QSplitter();layout.addWidget(self.split,1)
         self.view=ExplorerView(self);self.view.setViewMode(QListView.ViewMode.IconMode);self.view.setMovement(QListView.Movement.Static);self.view.setResizeMode(QListView.ResizeMode.Adjust);self.view.setUniformItemSizes(True);self.view.setLayoutMode(QListView.LayoutMode.Batched);self.view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection);self.view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -141,7 +143,10 @@ class DiskBrowser(QWidget):
     def travel(self,step):
         n=self.history_at+step
         if 0<=n<len(self.history):self.navigate(self.history[n],history_at=n)
-    def update_navigation(self):self.back.setEnabled(self.history_at>0);self.forward.setEnabled(self.history_at+1<len(self.history));self.refresh_action.setEnabled(bool(self.folder))
+    def sync_favorite(self):
+        saved=self.favorite_entry(self.folder) is not None;self.favorite_button.setChecked(saved)
+        self.favorite_button.setToolTip('즐겨찾는 경로에서 빼기' if saved else '현재 폴더를 즐겨찾는 경로에 넣기')
+    def update_navigation(self):self.sync_favorite();self.back.setEnabled(self.history_at>0);self.forward.setEnabled(self.history_at+1<len(self.history));self.refresh_action.setEnabled(bool(self.folder))
     def refresh_favorites(self):
         if hasattr(self,'navigation'):self.navigation.refresh_quick()
         self.favorites.clear();self.favorites.addItem('즐겨찾는 경로',None)
@@ -157,7 +162,7 @@ class DiskBrowser(QWidget):
         if stored is not None:paths.remove(stored)
         elif self.paths_exist([path]):paths.append(path)
         else:return False
-        self.state['favorites']=paths;self.refresh_favorites();self.save();return True
+        self.state['favorites']=paths;self.refresh_favorites();self.sync_favorite();self.save();return True
     def report_missing(self,path):self.owner.statusBar().showMessage('경로를 찾을 수 없습니다: '+(Path(path).name or str(Path(path))))
     def paths_exist(self,paths):
         for path in paths:

@@ -4,7 +4,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QByteArray, QSize
 from PySide6.QtGui import QColor, QPalette, QIcon, QPixmap, QPainter
 from PySide6.QtSvg import QSvgRenderer
-from PySide6.QtWidgets import QApplication, QPushButton, QLabel, QSizePolicy
+from PySide6.QtWidgets import QApplication, QPushButton, QLabel, QSizePolicy, QLayout, QGridLayout, QFormLayout
 
 PATHS = {
     'copy': '<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/>',
@@ -39,6 +39,8 @@ CANVAS_TEXT = '#d9dce1'
 
 # Spacing scale in pixels; layouts should pick from these steps.
 SPACE = (4, 8, 12, 16)
+# Every control is this tall: buttons, inputs, segmented tabs, list rows and icon buttons (the stylesheet derives its paddings from it).
+CONTROL = 32
 
 THEMES = {
     'light': dict(bg='#f2f3f5', surface='#ffffff', surface2='#e9ebef', fg='#1b1f26', muted='#6b7480', border='#d5d9e0',
@@ -90,6 +92,23 @@ def ghost(button, labelled=False):
     button.setProperty('ghost', True)
     if labelled: button.setProperty('labelled', True)
     return button
+
+
+def on_grid(root):
+    """Move the layouts under `root` onto the spacing scale.
+
+    Qt's own defaults (6 px gaps, 9 to 11 px margins) are off the 4 px grid, and most layouts are built without
+    setting either. Any gap or margin that is not a multiple of 4 becomes SPACE[1]; values already on the grid stay.
+    Call it once a window or dialog is fully built.
+    """
+    step = SPACE[1]
+    for layout in root.findChildren(QLayout):
+        if isinstance(layout, (QGridLayout, QFormLayout)):
+            if layout.horizontalSpacing() % 4: layout.setHorizontalSpacing(step)
+            if layout.verticalSpacing() % 4: layout.setVerticalSpacing(step)
+        elif layout.spacing() % 4: layout.setSpacing(step)
+        margins = layout.contentsMargins(); values = [margins.left(), margins.top(), margins.right(), margins.bottom()]
+        if any(value % 4 for value in values): layout.setContentsMargins(*[step if value % 4 else value for value in values])
 
 
 def caption(text, role='muted'):
@@ -144,12 +163,12 @@ def stylesheet(t):
     QStatusBar {{ background:{bg}; color:{muted}; border-top:1px solid {border}; }}
     QStatusBar::item {{ border:0; }}
     QLabel {{ background:transparent; }}
-    QLabel#brand {{ font-size:16px; font-weight:700; letter-spacing:1px; color:{accent}; padding:0 6px 0 2px; }}
-    QLabel[role="section"] {{ font-size:11px; font-weight:700; letter-spacing:1px; color:{muted}; padding:8px 0 2px 0; }}
+    QLabel#brand {{ font-size:16px; font-weight:600; color:{fg}; padding:0 8px 0 0; }}
+    QLabel[role="section"] {{ font-size:12px; font-weight:600; color:{muted}; padding:8px 0 4px 0; }}
     QLabel[role="title"] {{ font-size:15px; font-weight:600; }}
     QLabel[role="field"] {{ font-weight:600; }}
     QLabel[role="muted"] {{ color:{muted}; }}
-    QLineEdit, QPlainTextEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {{ background:{surface}; color:{fg}; border:1px solid {border}; border-radius:6px; padding:5px 8px; selection-background-color:{accent}; selection-color:{on_accent}; }}
+    QLineEdit, QPlainTextEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {{ background:{surface}; color:{fg}; border:1px solid {border}; border-radius:6px; padding:5px 8px; min-height:20px; selection-background-color:{accent}; selection-color:{on_accent}; }}
     QListView, QTreeView, QListWidget, QTreeWidget {{ background:{surface}; color:{fg}; border:1px solid {border}; border-radius:6px; padding:2px; selection-background-color:{selected}; outline:0; }}
     QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {{ border:1px solid {accent}; }}
     QLineEdit:disabled, QPlainTextEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {{ color:{disabled}; background:{bg}; }}
@@ -174,10 +193,10 @@ def stylesheet(t):
     QPushButton[ghost="true"]:hover {{ background:{surface2}; }}
     QPushButton[ghost="true"]:pressed {{ background:{selected}; }}
     QPushButton[ghost="true"]:checked {{ background:{selected}; border-color:{border}; }}
-    QPushButton[role="section"] {{ text-align:left; font-size:11px; font-weight:700; letter-spacing:1px; color:{muted}; background:transparent; border:1px solid transparent; padding:6px 2px; min-height:14px; }}
+    QPushButton[role="section"] {{ text-align:left; font-size:12px; font-weight:600; color:{muted}; background:transparent; border:1px solid transparent; padding:4px 0; min-height:16px; }}
     QPushButton[role="section"]:hover {{ color:{fg}; background:transparent; }}
     QPushButton[role="section"]:checked, QPushButton[role="section"]:pressed, QPushButton[role="section"]:focus {{ background:transparent; border-color:transparent; }}
-    QPushButton[chip="true"] {{ background:{selected}; color:{fg}; border:1px solid transparent; border-radius:11px; padding:2px 9px; font-size:12px; min-height:16px; }}
+    QPushButton[chip="true"] {{ background:{selected}; color:{fg}; border:1px solid transparent; border-radius:11px; padding:2px 8px; font-size:12px; min-height:16px; }}
     QPushButton[chip="true"]:hover {{ border-color:{accent}; }}
     QPushButton[chip="true"]:disabled {{ background:{surface2}; color:{muted}; }}
     QPushButton[ghost="true"]:disabled {{ background:transparent; }}
@@ -195,25 +214,25 @@ def stylesheet(t):
     QTabBar::tab {{ background:transparent; color:{muted}; padding:8px 8px; margin-right:1px; border-bottom:2px solid transparent; }}
     QTabBar::tab:hover {{ color:{fg}; }}
     QTabBar::tab:selected {{ color:{fg}; border-bottom:2px solid {accent}; font-weight:600; }}
-    QTabBar#mainNav::tab {{ font-size:14px; padding:9px 14px; }}
-    QTabBar#segment::tab {{ background:{surface}; color:{muted}; border:1px solid {border}; padding:5px 12px; margin:0 0 0 -1px; font-weight:400; }}
-    QTabBar#segment[tight="true"]::tab {{ padding:5px 7px; }}
+    QTabBar#mainNav::tab {{ font-size:14px; padding:8px 16px; }}
+    QTabBar#segment::tab {{ background:{surface}; color:{muted}; border:1px solid {border}; padding:6px 12px; min-height:18px; margin:0 0 0 -1px; font-weight:400; }}
+    QTabBar#segment[tight="true"]::tab {{ padding:6px 6px; }}
     QTabBar#segment::tab:first, QTabBar#segment::tab:only-one {{ margin-left:0; border-top-left-radius:6px; border-bottom-left-radius:6px; }}
     QTabBar#segment::tab:last, QTabBar#segment::tab:only-one {{ border-top-right-radius:6px; border-bottom-right-radius:6px; }}
     QTabBar#segment::tab:hover {{ background:{surface2}; color:{fg}; }}
     QTabBar#segment::tab:selected {{ background:{selected}; color:{fg}; border:1px solid {border}; font-weight:400; }}
     QTabBar::close-button {{ image:url({close}); width:12px; height:12px; margin:2px; border-radius:3px; }}
     QTabBar::close-button:hover {{ background:{surface2}; }}
-    QListView::item, QTreeView::item, QListWidget::item, QTreeWidget::item {{ padding:5px 4px; border-radius:4px; }}
+    QListView::item, QTreeView::item, QListWidget::item, QTreeWidget::item {{ padding:6px 4px; min-height:20px; border-radius:4px; }}
     QListView::item:hover, QTreeView::item:hover {{ background:{surface2}; }}
     QListView::item:selected, QTreeView::item:selected, QListWidget::item:selected, QTreeWidget::item:selected {{ background:{selected}; color:{fg}; }}
     QHeaderView::section {{ background:{surface2}; color:{muted}; border:0; border-bottom:1px solid {border}; padding:6px 8px; font-weight:600; }}
     QScrollBar:vertical {{ background:transparent; width:12px; margin:0; }}
-    QScrollBar::handle:vertical {{ background:{border}; border-radius:4px; min-height:28px; margin:2px 3px; }}
+    QScrollBar::handle:vertical {{ background:{border}; border-radius:4px; min-height:28px; margin:2px; }}
     QScrollBar::handle:vertical:hover {{ background:{muted}; }}
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height:0; background:transparent; }}
     QScrollBar:horizontal {{ background:transparent; height:12px; margin:0; }}
-    QScrollBar::handle:horizontal {{ background:{border}; border-radius:4px; min-width:28px; margin:3px 2px; }}
+    QScrollBar::handle:horizontal {{ background:{border}; border-radius:4px; min-width:28px; margin:2px; }}
     QScrollBar::handle:horizontal:hover {{ background:{muted}; }}
     QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width:0; background:transparent; }}
     QScrollBar::add-page, QScrollBar::sub-page {{ background:transparent; }}
@@ -229,8 +248,8 @@ def stylesheet(t):
     QMenu::separator {{ height:1px; background:{border}; margin:4px 8px; }}
     QToolTip {{ background:{surface}; color:{fg}; border:1px solid {border}; border-radius:4px; padding:6px 8px; }}
     QSplitter::handle {{ background:transparent; }}
-    QSplitter::handle:horizontal {{ width:6px; }}
-    QSplitter::handle:vertical {{ height:6px; }}
+    QSplitter::handle:horizontal {{ width:8px; }}
+    QSplitter::handle:vertical {{ height:8px; }}
     QSplitter::handle:hover {{ background:{selected}; }}
     QScrollArea, QScrollArea > QWidget > QWidget {{ background:transparent; border:0; }}
     QGraphicsView {{ border:1px solid {border}; }}

@@ -66,7 +66,7 @@ class TreeDelegate(QStyledItemDelegate):
 
 class NavigationPane(QWidget):
     def __init__(self,panel):
-        super().__init__();self.panel=panel;self.setMinimumWidth(150);layout=QVBoxLayout(self);layout.setContentsMargins(0,0,5,0)
+        super().__init__();self.panel=panel;self.setMinimumWidth(150);layout=QVBoxLayout(self);layout.setContentsMargins(0,0,4,0)
         layout.addWidget(caption('빠른 이동 / 즐겨찾기','section'));self.quick=QListWidget();self.quick.setMaximumHeight(185);layout.addWidget(self.quick)
         self.quick.itemClicked.connect(lambda item:panel.navigate(item.data(Qt.ItemDataRole.UserRole)))
         layout.addWidget(caption('내 PC · 폴더','section'));self.tree=QTreeView();layout.addWidget(self.tree,1)
