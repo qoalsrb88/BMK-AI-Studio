@@ -1,10 +1,8 @@
 """Top-level task tabs, preserving image and note editing contexts."""
-from PySide6.QtWidgets import QWidget,QVBoxLayout,QHBoxLayout,QSplitter,QTabBar,QDialog,QLabel,QPlainTextDocumentLayout,QScrollArea
+from PySide6.QtWidgets import QWidget,QVBoxLayout,QSplitter,QTabBar,QDialog,QLabel,QPlainTextDocumentLayout,QScrollArea
 from PySide6.QtGui import QTextDocument,QTextCursor
 from .workspace import action,line
 from .appearance import caption
-
-NOTE_WIDTH=960  # widest the note editor grows, so prompt lines stay readable on a wide window
 
 class MainTabsMixin:
     def build_main_tabs(self,outer):
@@ -12,7 +10,7 @@ class MainTabsMixin:
         self.main_tabs=QTabBar();self.main_tabs.setExpanding(False);self.main_tabs.setDrawBase(False);self.main_tabs.setObjectName('mainNav')
         for title in ('파일 탐색','이미지 라이브러리','노트'):self.main_tabs.addTab(title)
         self.main_tabs.setCurrentIndex(1);self.header_layout.insertWidget(1,self.main_tabs)
-        self.notes_page=QSplitter();self.notes_page.addWidget(self.note_browser);self.note_editor_host=QWidget();self.note_editor_layout=QHBoxLayout(self.note_editor_host);self.note_editor_layout.addStretch(1);self.note_editor_scroll=QScrollArea();self.note_editor_scroll.setWidgetResizable(True);self.note_editor_scroll.setWidget(self.note_editor_host);self.notes_page.addWidget(self.note_editor_scroll);self.notes_page.setSizes([300,1000]);self.notes_page.hide();outer.addWidget(self.notes_page,1)
+        self.notes_page=QSplitter();self.notes_page.addWidget(self.note_browser);self.note_editor_host=QWidget();self.note_editor_layout=QVBoxLayout(self.note_editor_host);self.note_editor_scroll=QScrollArea();self.note_editor_scroll.setWidgetResizable(True);self.note_editor_scroll.setWidget(self.note_editor_host);self.notes_page.addWidget(self.note_editor_scroll);self.notes_page.setSizes([300,1000]);self.notes_page.hide();outer.addWidget(self.notes_page,1)
         self.open_saved_note=action('저장한 노트 열기',self.open_transferred_note);self.open_saved_note.hide();outer.addWidget(self.open_saved_note)
         self.image_view_modes=QTabBar();self.image_view_modes.setObjectName('segment');self.image_view_modes.setExpanding(False);self.image_view_modes.setDrawBase(False);self.image_view_modes.setUsesScrollButtons(False);self.image_view_modes.addTab('갤러리');self.image_view_modes.addTab('큰 미리보기');self.image_view_modes.currentChanged.connect(lambda i:self.workspace_mode.setCurrentIndex(i));self.image_work_layout.insertWidget(0,caption('이미지에 연결된 작업 프롬프트'))
         self.gallery_toolbar.layout().insertWidget(0,self.image_view_modes)
@@ -63,10 +61,8 @@ class MainTabsMixin:
         if not hasattr(self,'main_tabs'):return
         index=self.main_tabs.currentIndex();notes=index==2
         self.main_splitter.setVisible(index==1);self.disk_browser.setVisible(index==0);self.disk_browser.set_active(index==0);self.notes_page.setVisible(notes)
-        # On the note page the editor sits left of a stretch and stops growing at NOTE_WIDTH.
-        if notes:self.note_editor_layout.insertWidget(0,self.prompt_editor,100)
-        else:self.image_work_layout.addWidget(self.prompt_editor)
-        self.prompt_editor.setMaximumWidth(NOTE_WIDTH if notes else 16777215);self.prompt_editor.show()
+        # The note editor fills its pane; its width is set by dragging the divider beside the note list.
+        (self.note_editor_layout if notes else self.image_work_layout).addWidget(self.prompt_editor);self.prompt_editor.show()
         for widget in self.image_actions:widget.setVisible(not notes)
         for widget in self.note_only_controls:widget.setVisible(notes)
         self.work_prompt_header.layout().itemAt(0).widget().setText('노트 프롬프트' if notes else '작업 프롬프트');self.work_negative_header.layout().itemAt(0).widget().setText('노트 네거티브' if notes else '작업 네거티브');self.image_note_save.setVisible(not notes);self.note_tabs.setTabVisible(0,False)
