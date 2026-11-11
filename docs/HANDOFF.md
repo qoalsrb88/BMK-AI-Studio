@@ -38,7 +38,7 @@
 | 개발 테스트 | `.venv/Scripts/pythonw.exe` + `scripts/launch_dev.pyw` | `%LOCALAPPDATA%/BMK-AI-Studio-dev` |
 | 자동 회귀 검사 | `scripts/validate.py` | 각 검사의 합성 데이터·임시 폴더 |
 
-`BMK AI Studio.lnk`와 `BMK AI Studio (Standalone).lnk`는 해당 PC에서 선택한 실사용 EXE를, `BMK AI Studio (개발 테스트).lnk`는 개발 실행기를 가리킵니다. 교체 전 실제 대상과 `build-info.json`을 확인하고 기존 바로가기와 EXE를 보존합니다. 로컬 바로가기, portable 폴더, 이전 바로가기 백업은 Git에 포함하지 않으므로 다른 PC에는 자동 생성되지 않습니다.
+`BMK AI Studio.lnk`와 `BMK AI Studio (Standalone).lnk`는 해당 PC에서 선택한 실사용 EXE를, `BMK AI Studio (개발 테스트).lnk`는 개발 실행기를 가리킵니다. 교체 전 실제 대상과 `build-info.json`을 확인합니다. 기존 바로가기와 EXE는 지우거나 덮어쓰지 않고, 사용자 확인을 받아 새 EXE로 전환한 뒤 [배포 절차](RELEASING.md)의 정리 기준에 따라 삭제대기 폴더로 옮깁니다. 로컬 바로가기, portable 폴더, 이전 바로가기 백업은 Git에 포함하지 않으므로 다른 PC에는 자동 생성되지 않습니다.
 
 개발 실행 명령:
 
@@ -80,7 +80,7 @@ git pull --ff-only origin main
 ## 변경 중 유지할 원칙
 
 - 원본 이미지를 덮어쓰지 않고 원본 메타데이터·추정 태그·작업 프롬프트를 구분합니다. 없는 원본 프롬프트를 만들어내지 않습니다.
-- 사용자 노트의 알 수 없는 필드, 기존 데이터·설정과 이전 배포본을 보존합니다. 데이터 이전 작업은 별도 범위와 검증이 필요합니다.
+- 사용자 노트의 알 수 없는 필드, 기존 데이터·설정을 보존하고 이전 배포본은 지우지 않습니다(새 버전을 게시·확인한 뒤 개발 PC의 이전 버전 폴더는 삭제대기 폴더로 옮김). 데이터 이전 작업은 별도 범위와 검증이 필요합니다.
 - 모델 추론·이미지 처리는 UI를 막지 않도록 처리하며, 선택 이미지가 바뀐 뒤 오래된 결과가 적용되지 않게 합니다.
 - 모델·노트·이미지·DB·캐시·로그·인증정보·`local-settings.json`은 GitHub에 업로드하지 않습니다. `.gitignore`가 이미 추적 중인 파일까지 자동으로 제거해주지는 않습니다.
 - Windows HTTPS는 Schannel을 사용합니다. 과거 OpenSSL DLL 충돌 문제를 피하도록 한 초기화 경로를 유지합니다.
@@ -145,7 +145,7 @@ EXE를 새로 배포할 때는 소스 검사만으로 완료하지 않습니다.
 
 위 파일명은 별도 표시가 없으면 `bmk_studio/` 기준입니다. `legacy_update_dialog.py`와 이전 서명·설치 모듈은 현재 공개 업데이트 화면으로 연결하지 않습니다.
 
-상세 사용법은 [USAGE](USAGE.md), 환경·실행은 [DEVELOPMENT](DEVELOPMENT.md), 변경 이력은 [DISTRIBUTION_PROGRESS](DISTRIBUTION_PROGRESS.md)를 참고합니다. 로컬의 최신 `validation-<버전>/`, `.backups/`에는 당시 검사·배포 스크립트와 데이터·바로가기 백업이 있으나 Git 복제본에는 포함되지 않습니다. 개발 PC의 폴더를 정리할 때도 `.venv`, CPU 빌드 환경 `build/cpu-env`, 바로가기가 가리키는 최신 `portable/…-NVIDIA`, 최신 `release-<버전>/`(다음 배포에 복사할 Qt/PySide 소스), 최신 `validation-<버전>/`(다음 배포에 옮겨 쓸 스크립트), `.backups/`(노트·설정 백업)는 남깁니다. 공개 검증 요약은 Release의 `RELEASE_VALIDATION.json`에 있으며 게시 당시 결과입니다. 이 세션에서 수집한 개인 경로 포함 로그를 통째로 공개하지 마세요.
+상세 사용법은 [USAGE](USAGE.md), 환경·실행은 [DEVELOPMENT](DEVELOPMENT.md), 변경 이력은 [DISTRIBUTION_PROGRESS](DISTRIBUTION_PROGRESS.md)를 참고합니다. 로컬의 최신 `validation-<버전>/`, `.backups/`에는 당시 검사·배포 스크립트와 데이터·바로가기 백업이 있으나 Git 복제본에는 포함되지 않습니다. 새 버전을 게시하고 공개 확인을 마치면 [배포 절차](RELEASING.md)의 **배포 뒤 이전 버전 로컬 산출물 정리**에 따라 이전 버전의 `portable`·`release-<버전>`·`validation-<버전>`·`package-<버전>-*` 폴더와 `build/windows-*`를 지우지 않고 삭제대기 폴더로 옮깁니다(0.9.17 배포 때 0.9.15·0.9.16 산출물에 처음 적용). 이때를 포함해 개발 PC의 폴더를 정리할 때는 `.venv`, CPU 빌드 환경 `build/cpu-env`, 바로가기가 가리키는 최신 `portable/…-NVIDIA`, 최신 `release-<버전>/`(다음 배포에 복사할 Qt/PySide 소스), 최신 `validation-<버전>/`(다음 배포에 옮겨 쓸 스크립트), `.backups/`(노트·설정 백업)는 남깁니다. 공개 검증 요약은 Release의 `RELEASE_VALIDATION.json`에 있으며 게시 당시 결과입니다. 이 세션에서 수집한 개인 경로 포함 로그를 통째로 공개하지 마세요.
 
 ## 새 세션 시작용 요청문
 

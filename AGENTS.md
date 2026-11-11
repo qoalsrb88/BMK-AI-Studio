@@ -11,4 +11,5 @@
 - Keep UI responsive for model inference and image processing. Guard results against image selection changes.
 - Before delivery, run unittest and Qt smoke tests; when tagging changes, also run the optional local-model GPU smoke test.
 - Do not upload data, models, notes, caches, or local-settings.json to GitHub.
+- After a release is published and publicly verified, move the superseded local build outputs (older portable/, release-*, validation-* and package-* folders, build/windows-* work folders) to the drive's `_삭제대기` holding folder as the last release step, following docs/RELEASING.md. Never delete them or empty the holding folder, and keep any folder a real-use shortcut still points to.
 - Current scope and remaining functionality are documented in README.md. Do not describe deferred features as implemented.
