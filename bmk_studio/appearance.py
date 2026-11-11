@@ -4,7 +4,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QByteArray, QSize
 from PySide6.QtGui import QColor, QPalette, QIcon, QPixmap, QPainter
 from PySide6.QtSvg import QSvgRenderer
-from PySide6.QtWidgets import QApplication, QPushButton, QLabel
+from PySide6.QtWidgets import QApplication, QPushButton, QLabel, QSizePolicy
 
 PATHS = {
     'copy': '<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/>',
@@ -24,6 +24,7 @@ PATHS = {
     'chevron-right': '<path d="m9 6 6 6-6 6"/>',
     'close': '<path d="M6 6l12 12M18 6 6 18"/>',
     'check': '<path d="m5 12 5 5L20 7"/>',
+    'fit': '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
     'eye': '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
 }
 
@@ -87,6 +88,34 @@ def ghost(button):
 def caption(text, role='muted'):
     """Label with a typographic role: 'section' (group header), 'title', 'field' (editor label) or 'muted' (hint)."""
     widget = QLabel(text); widget.setProperty('role', role); return widget
+
+
+class ElidedLabel(QLabel):
+    """Label that never wraps: each line is shortened to the width it gets and the full text stays in the tooltip.
+
+    `keep` is the width in pixels the label holds on to before it starts shortening; with 0 it takes whatever is left.
+    `lines` reserves that many lines of height so the widgets below do not move when the text changes.
+    """
+    def __init__(self, text='', role=None, mode=Qt.TextElideMode.ElideMiddle, keep=0, lines=1):
+        super().__init__(); self.full = ''; self.mode = mode; self.keep = keep; self.lines = lines
+        if role: self.setProperty('role', role)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred if keep else QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self.setText(text)
+
+    def setText(self, text):
+        self.full = text or ''; self.setToolTip(self.full); self.updateGeometry(); self._fit()
+
+    def _fit(self):
+        metrics = self.fontMetrics()
+        super().setText('\n'.join(metrics.elidedText(line, self.mode, self.width()) for line in self.full.split('\n')))
+
+    def _size(self, width):
+        metrics = self.fontMetrics(); rows = self.full.split('\n')
+        return QSize(width(max(metrics.horizontalAdvance(row) for row in rows) + 2), metrics.lineSpacing() * max(self.lines, len(rows)) + 2)
+
+    def sizeHint(self): return self._size(lambda full: full)
+    def minimumSizeHint(self): return self._size(lambda full: min(full, self.keep))
+    def resizeEvent(self, event): super().resizeEvent(event); self._fit()
 
 
 def asset(name, color, size=24):

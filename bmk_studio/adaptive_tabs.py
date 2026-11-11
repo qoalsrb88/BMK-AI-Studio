@@ -9,6 +9,7 @@ class AdaptiveTabWidget(QTabWidget):
     def __init__(self, parent=None):
         super().__init__(parent); self.titles = []; self.compact = False; self.full_width = 0; self.fitting = False
         self.setElideMode(Qt.TextElideMode.ElideNone)
+        self.currentChanged.connect(lambda index: self._apply(True) if self.compact else None)
 
     def addTab(self, *args):
         index = super().addTab(*args); self.titles.insert(index, self.tabText(index)); self.setTabToolTip(index, self.titles[index]); return index
@@ -31,5 +32,6 @@ class AdaptiveTabWidget(QTabWidget):
         finally: self.fitting = False
 
     def _apply(self, compact):
-        self.compact = compact
-        for index, title in enumerate(self.titles): self.setTabText(index, '' if compact else title); self.setTabToolTip(index, title)
+        # Narrow panels keep the title of the open tab, so the icons alone never have to name the page.
+        self.compact = compact; current = self.currentIndex()
+        for index, title in enumerate(self.titles): self.setTabText(index, title if not compact or index == current else ''); self.setTabToolTip(index, title)

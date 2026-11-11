@@ -43,7 +43,9 @@ try:
     QTest.keyClick(d.address,Qt.Key.Key_F,Qt.KeyboardModifier.ControlModifier);assert d.search.hasFocus()
     # Tree click uses the same navigation/history; Alt+Up returns to the parent.
     child=d.navigation.fs.index(str(folder/'child'));wait(lambda:child.isValid() and not d.navigation.tree.visualRect(child).isEmpty())
-    d.navigation.tree.scrollTo(child);QTest.mouseClick(d.navigation.tree.viewport(),Qt.MouseButton.LeftButton,pos=d.navigation.tree.visualRect(child).center());wait(lambda:d.folder==str(folder/'child') and not d.scan_job)
+    # The name column is as wide as its longest row, so click the name itself: reveal() must have brought it into the pane.
+    tree=d.navigation.tree;tree.scrollTo(child);d.navigation.reveal(child);name=tree.visualRect(child);assert 0<=name.left()<tree.viewport().width()-12,'current folder name is outside the tree pane'
+    QTest.mouseClick(tree.viewport(),Qt.MouseButton.LeftButton,pos=QPoint(name.left()+12,name.center().y()));wait(lambda:d.folder==str(folder/'child') and not d.scan_job)
     QTest.keyClick(d.navigation.tree,Qt.Key.Key_Up,Qt.KeyboardModifier.AltModifier);wait(lambda:d.folder==str(folder) and not d.scan_job)
     d.view.setFocus();QTest.keyClick(d.view,Qt.Key.Key_Left,Qt.KeyboardModifier.AltModifier);wait(lambda:d.folder==str(folder/'child') and not d.scan_job)
     QTest.keyClick(d.view,Qt.Key.Key_Right,Qt.KeyboardModifier.AltModifier);wait(lambda:d.folder==str(folder) and not d.scan_job)

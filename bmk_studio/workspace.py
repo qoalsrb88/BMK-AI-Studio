@@ -27,11 +27,15 @@ def bar(*items):
         else:layout.addWidget(item)
     return host
 
+# Library panes: filters, cards, info panel. The info panel default leaves room for its tab titles.
+SIDEBAR_WIDTH=256
+PANES=(256,728,480)
+
 class WorkspaceMixin:
-    def viewer_actions(self):
-        menu=QMenu(self)
+    def viewer_menu(self,parent):
+        menu=QMenu(parent)
         for label,callback in [('원본 보기',self.show_original),('작업본 보기',self.show_current),('전후 비교',self.compare_images),('이미지 복사',self.copy_image),('원본 파일 복사',self.copy_file),('편집 작업 보관',self.save_edit_session),('보관한 편집 작업 열기',self.open_edit_sessions)]:menu.addAction(label,callback)
-        menu.exec(self.cursor().pos())
+        return menu
 
     def pin_compare(self):
         if not self.path:return
@@ -282,12 +286,13 @@ class WorkspaceMixin:
         if mode=='disk':
             self.library.large.pause();return
         self.preview_panel.setVisible(not browsing)
+        for widget in (self.thumbnail_label,self.thumbnail_slider):widget.setVisible(browsing)  # the filmstrip has one fixed size
         self.library.setViewMode(QListView.ViewMode.IconMode);self.library.setMovement(QListView.Movement.Static)
         self.library.setFlow(QListView.Flow.LeftToRight);self.library.setWrapping(browsing);self.library.setResizeMode(QListView.ResizeMode.Adjust)
         size=self.thumbnail_slider.value() if browsing else 96
         self.library.setMinimumHeight(110 if browsing else size+84);self.library.setMaximumHeight(16777215 if browsing else size+94)
         self.library.set_thumbnail_size(size);self.library.setWordWrap(False)
-        self.main_splitter.setSizes(self.workspace_sizes.get(mode,[265,850,370]))
+        self.main_splitter.setSizes(self.workspace_sizes.get(mode,list(PANES)))
         def restore():
             x,y=self.workspace_positions.get(mode,[0,0]);self.library.horizontalScrollBar().setValue(x);self.library.verticalScrollBar().setValue(y)
             if mode=='work' and not getattr(self,'workspace_has_fit',False):self.viewer.fit();self.workspace_has_fit=True

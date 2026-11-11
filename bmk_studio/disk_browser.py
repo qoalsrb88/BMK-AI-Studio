@@ -7,7 +7,7 @@ from PySide6.QtGui import QPixmap,QIcon,QColor,QAction,QKeySequence
 from PySide6.QtWidgets import (QWidget,QVBoxLayout,QLineEdit,QComboBox,QLabel,QListView,QAbstractItemView,QSplitter,QPlainTextEdit,QFileDialog,QSlider,QTabWidget,QStyle,QMenu)
 from .core import EXTENSIONS,load_image,inspect_image,json_text,file_stamp
 from .workspace import line,action,bar
-from .appearance import CANVAS,caption
+from .appearance import CANVAS,caption,ElidedLabel
 from .prompt_highlight import PromptEdit
 from .cards import caption_height
 from .explorer_navigation import ExplorerView,NavigationPane
@@ -77,12 +77,12 @@ class DiskBrowser(QWidget):
         self.split=QSplitter();layout.addWidget(self.split,1)
         self.view=ExplorerView(self);self.view.setViewMode(QListView.ViewMode.IconMode);self.view.setMovement(QListView.Movement.Static);self.view.setResizeMode(QListView.ResizeMode.Adjust);self.view.setUniformItemSizes(True);self.view.setLayoutMode(QListView.LayoutMode.Batched);self.view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection);self.view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.model=DiskModel(self);self.proxy=DiskProxy(self);self.proxy.setSourceModel(self.model);self.view.setModel(self.proxy);self.navigation=NavigationPane(self);self.split.addWidget(self.navigation);self.split.addWidget(self.view)
-        side=QWidget();right=QVBoxLayout(side);self.side_layout=right;self.label=caption('원본 미리보기','field');self.label.setWordWrap(True);right.addWidget(self.label)
+        side=QWidget();right=QVBoxLayout(side);self.side_layout=right;self.label=ElidedLabel('원본 미리보기','field',lines=2);right.addWidget(self.label)  # name and size, then the path shortened in the middle
         self.viewer=viewer_class();self.viewer.placeholder='이미지를 선택하면 원본을 여기에서 미리 봅니다.';self.viewer.display(None);right.addWidget(self.viewer,3);right.addWidget(line(action('화면 맞춤',self.viewer.fit),action('100%',self.viewer.actual_size)))
         self.info_tabs=QTabWidget();right.addWidget(self.info_tabs,2)
         self.positive=PromptEdit();self.negative=PromptEdit();self.metadata=QPlainTextEdit()
         for title,editor in [('프롬프트',self.positive),('네거티브',self.negative),('전체 정보',self.metadata)]:
-            editor.setReadOnly(True);editor.setPlaceholderText('원본에 기록된 '+title+'가 없습니다.');page=QWidget();form=QVBoxLayout(page);form.addWidget(owner.prompt_header(title,editor));form.addWidget(editor);self.info_tabs.addTab(page,title)
+            editor.setReadOnly(True);editor.setPlaceholderText('원본에 기록된 '+title+'가 없습니다.');page=QWidget();form=QVBoxLayout(page);form.setContentsMargins(0,8,0,0);form.addWidget(owner.prompt_header(title,editor));form.addWidget(editor);self.info_tabs.addTab(page,title)
         self.split.addWidget(side);sizes=self.state.get('split',[220,660,400])
         if not isinstance(sizes,list) or len(sizes)!=3:sizes=[220,660,400]
         self.split.setSizes(sizes)

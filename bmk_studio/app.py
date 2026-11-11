@@ -16,9 +16,9 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
     QCheckBox, QGraphicsView, QGraphicsScene, QGraphicsRectItem, QAbstractItemView,
     QDialog, QDialogButtonBox, QFormLayout, QProgressBar, QTreeWidget, QTreeWidgetItem, QScrollArea, QTabBar, QMenu, QSlider, QStackedWidget, QFrame, QHeaderView, QInputDialog)
 from . import shell_actions
-from .workspace import WorkspaceMixin, bar
+from .workspace import WorkspaceMixin, bar, PANES, SIDEBAR_WIDTH
 from .discovery_ui import DiscoveryMixin
-from .appearance import apply_theme, decorate, icon, ghost, caption, tokens, CANVAS, CANVAS_TEXT
+from .appearance import apply_theme, decorate, icon, ghost, caption, tokens, ElidedLabel, CANVAS, CANVAS_TEXT
 from .hints import HintListWidget
 from .background import JobCenter
 from .prompt_highlight import PromptEdit, refresh_all as refresh_highlighting
@@ -97,6 +97,8 @@ class Viewer(CropInteraction,QGraphicsView):
         self.setScene(QGraphicsScene(self))
         self.setBackgroundBrush(QColor(CANVAS))
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        # The image is moved by dragging; with the edge margin the bars would show even around an image that fits.
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff);self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.crop_mode = False
         self.crop_item = None
@@ -419,7 +421,9 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         nl.addWidget(row(button('노트 가져오기',self.import_notes),button('새 노트',self.new_note)))
         nl.addWidget(button('노트 폴더 가져오기',self.import_note_folder));self.build_note_sync(nl)
         self.notes.setMinimumHeight(150)
-        sidebar=QScrollArea();sidebar.setWidgetResizable(True);sidebar.setWidget(left);sidebar.setMinimumWidth(245);splitter.addWidget(sidebar)
+        sidebar=QScrollArea();sidebar.setWidgetResizable(True);sidebar.setWidget(left);self.sidebar=sidebar;splitter.addWidget(sidebar)
+        # Wide enough for the widest row plus the vertical bar, so opening a section never brings a horizontal bar.
+        sidebar.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff);sidebar.setMinimumWidth(SIDEBAR_WIDTH)
         center_host=QWidget();center_layout=QVBoxLayout(center_host);center_layout.setContentsMargins(6,0,6,0)
         self.selection_label=caption('선택 0개');self.browser_count=QLabel('0개')
         self.selection_actions=button('선택 작업',self.selection_menu)
@@ -430,24 +434,31 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         self.inspector_toggle=QPushButton();self.inspector_toggle.setCheckable(True);self.inspector_toggle.setChecked(True);ghost(self.inspector_toggle);decorate(self.inspector_toggle,'info');self.inspector_toggle.setFixedSize(32,32)
         self.inspector_toggle.setToolTip('정보 패널 표시 / 숨기기');self.inspector_toggle.setAccessibleName('정보 패널')
         self.inspector_toggle.toggled.connect(lambda on:self.tabs.setVisible(on))
-        # One gallery toolbar: view-mode tabs (inserted by build_main_tabs), counts, then actions and view options.
-        self.gallery_toolbar=bar(self.browser_count,self.selection_label,None,self.selection_actions,self.sort_order,self.pin_button,self.compare_button,self.thumbnail_label,self.thumbnail_slider,self.inspector_toggle)
+        # Toolbar: view-mode tabs (inserted by build_main_tabs), then actions. Counts and view options sit in the footer
+        # under the cards, so the row still fits the centre column at the minimum window width.
+        self.gallery_toolbar=bar(None,self.selection_actions,self.pin_button,self.compare_button,self.inspector_toggle)
+        self.gallery_footer=bar(self.browser_count,self.selection_label,None,self.sort_order,self.thumbnail_label,self.thumbnail_slider)
         center_layout.addWidget(self.gallery_toolbar)
         center = QWidget();self.preview_panel=center;cl=QVBoxLayout(center);cl.setContentsMargins(0,0,0,0)
-        self.file_label=QLabel('이미지를 여기에 놓으세요'); self.file_label.setWordWrap(True); cl.addWidget(self.file_label)
+        # One line: name and size keep their width first, the folder takes the rest and is shortened in the middle.
+        self.file_label=ElidedLabel('이미지를 여기에 놓으세요',keep=220);self.file_folder=ElidedLabel('',role='muted');cl.addWidget(bar(self.file_label,(self.file_folder,1)))
         self.viewer=Viewer(); self.viewer.cropChanged.connect(self.set_box); cl.addWidget(self.viewer,1)
         self.zoom_label=caption('—');self.zoom_label.setMinimumWidth(44);self.zoom_label.setToolTip('현재 확대율')
         self.viewer.zoomChanged.connect(lambda z:self.zoom_label.setText(f'{z*100:.0f}%' if z>0 else '—'))
         self.viewer.interpolationChanged.connect(self.save_interpolation)
-        cl.addWidget(bar(button('화면 맞춤',self.viewer.fit),button('100%',self.viewer.actual_size),self.zoom_label,None,button('실행 취소',self.undo),button('보기 / 복사 / 보관',self.viewer_actions),button('작업본 내보내기',self.export_image,True)))
-        center_layout.addWidget(center,1);center_layout.addWidget(self.library,1)
+        fit=button('',self.viewer.fit);decorate(fit,'fit');undo=button('',self.undo);decorate(undo,'undo')
+        for item,label in ((fit,'화면 맞춤'),(undo,'실행 취소')):ghost(item);item.setFixedSize(32,32);item.setToolTip(label);item.setAccessibleName(label)
+        self.viewer_more=QPushButton('더 보기');self.viewer_more.setToolTip('보기 / 복사 / 보관');self.viewer_more.setMenu(self.viewer_menu(self.viewer_more))
+        actual=ghost(button('1:1',self.viewer.actual_size));actual.setToolTip('실제 크기 (100%)');actual.setAccessibleName('실제 크기 (100%)')
+        cl.addWidget(bar(fit,actual,self.zoom_label,None,undo,self.viewer_more,button('작업본 내보내기',self.export_image,True)))
+        center_layout.addWidget(center,1);center_layout.addWidget(self.library,1);center_layout.addWidget(self.gallery_footer)
         # Save and job state live in the status bar; the job segment opens the job list.
         self.save_status=caption('텍스트 저장됨');self.statusBar().addPermanentWidget(self.save_status)
         self.jobs_status=QPushButton('작업 대기');ghost(self.jobs_status);self.jobs_status.setToolTip('진행 중인 작업 목록 열기');self.jobs_status.clicked.connect(lambda:JobCenter(self).exec())
         self.statusBar().addPermanentWidget(self.jobs_status)
         splitter.addWidget(center_host)
         self.tabs=AdaptiveTabWidget(); splitter.addWidget(self.tabs)
-        splitter.setSizes([240,730,510])
+        splitter.setSizes(list(PANES))
         original_page=QWidget(); ol=QVBoxLayout(original_page)
         self.source=caption('원본 메타데이터'); self.source.setWordWrap(True); ol.addWidget(self.source)
         self.positive=PromptEdit(); self.positive.setReadOnly(True); self.positive.setPlaceholderText('파일에 저장된 프롬프트')
@@ -457,6 +468,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         ol.addWidget(row(button('프롬프트 복사',lambda:self.copy_text(self.positive.toPlainText())),button('작업으로 가져오기',self.use_original,True)))
         self.tabs.addTab(original_page,'원본')
         work=QWidget();self.image_work_layout=QVBoxLayout(work);self.prompt_editor=QWidget();self.image_work_layout.addWidget(self.prompt_editor);wl=QVBoxLayout(self.prompt_editor)
+        wl.setContentsMargins(0,0,0,0)  # the tab page (or the note page) already supplies the margin
         self.note_tabs=QTabBar();self.note_tabs.setExpanding(False);self.note_tabs.setTabsClosable(True)
         self.note_tabs.addTab('이미지 작업');self.note_tabs.setTabData(0,{'id':None,'image':True})
         self.note_tabs.setTabButton(0,QTabBar.ButtonPosition.RightSide,None)
@@ -571,6 +583,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         color_page=QWidget();el=QVBoxLayout(color_page);self.edit_pages.addWidget(color_page)
         el.addWidget(QLabel('원본의 색상 정보를 해석해 별도 작업본으로 변환합니다.'))
         el.addWidget(button('ICC / HDR 원본 색상 정규화',self.normalize_color));el.addStretch()
+        for index in range(self.edit_pages.count()):self.edit_pages.widget(index).layout().setContentsMargins(0,0,0,0)
         self.edit_tool.currentIndexChanged.connect(self.edit_pages.setCurrentIndex)
         def change_tool(index):
             if index!=0:self.crop_toggle.setChecked(False)
@@ -672,7 +685,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
                 self.source.setText('자동 복구본을 열었습니다. 확인 후 작업 보관 또는 내보내기하세요.')
             else:restore_error='자동 복구본 검증 실패: '+self.session_error
         self.viewer.display(self.current);self.set_box(self.box or (0,0,*self.current.size));self.render_tags()
-        self.file_label.setText(f'{self.path.name}\n{im.width} × {im.height}  ·  {self.path.parent}')
+        self.file_label.setText(f'{self.path.name}  ·  {im.width} × {im.height}');self.file_folder.setText(str(self.path.parent))
         self.statusBar().showMessage('메타데이터 읽기 완료 · 작업 프롬프트 자동 저장')
         if restore_error:self.source.setText(restore_error+' · 원본 이미지만 열었습니다.')
         self.refresh_saved_tags()

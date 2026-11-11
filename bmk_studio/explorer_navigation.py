@@ -3,7 +3,7 @@ from pathlib import Path
 import os
 from PySide6.QtCore import Qt,QSize,QDir,QModelIndex,QStandardPaths,QEvent
 from PySide6.QtGui import QIcon,QKeySequence,QShortcut
-from PySide6.QtWidgets import (QListView,QStyledItemDelegate,QStyleOptionViewItem,QStyle,QWidget,QVBoxLayout,QLabel,QTreeView,QFileSystemModel,QAbstractItemView,QListWidget,QListWidgetItem)
+from PySide6.QtWidgets import (QListView,QStyledItemDelegate,QStyleOptionViewItem,QStyle,QWidget,QVBoxLayout,QLabel,QTreeView,QFileSystemModel,QAbstractItemView,QListWidget,QListWidgetItem,QToolTip)
 from .appearance import caption,icon as line_icon,pixmap,tokens
 from .hints import paint_hint
 from .cards import paint_card
@@ -59,6 +59,10 @@ class TreeDelegate(QStyledItemDelegate):
             color=option.palette.color(option.palette.ColorRole.Text).name()
             if not self.cached or self.cached[0]!=color:self.cached=(color,line_icon('folder',color))
             option.icon=self.cached[1]
+    def helpEvent(self,event,view,option,index):
+        # A narrow pane cuts long names short; the tooltip carries the whole path.
+        if event.type()==QEvent.Type.ToolTip and index.isValid():QToolTip.showText(event.globalPos(),index.model().filePath(index),view);return True
+        return super().helpEvent(event,view,option,index)
 
 class NavigationPane(QWidget):
     def __init__(self,panel):
@@ -69,6 +73,7 @@ class NavigationPane(QWidget):
         self.fs=QFileSystemModel(self);self.fs.setReadOnly(True);self.fs.setOption(QFileSystemModel.Option.DontUseCustomDirectoryIcons,True);self.fs.setFilter(QDir.Filter.AllDirs|QDir.Filter.NoDotAndDotDot|QDir.Filter.Drives);self.fs.setRootPath('')
         self.tree.setModel(self.fs);self.tree.setItemDelegate(TreeDelegate(self.tree));self.tree.setHeaderHidden(True);self.tree.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers);self.tree.setDragEnabled(False);self.tree.setAcceptDrops(False);self.tree.setUniformRowHeights(True);self.tree.setIndentation(14);self.tree.setColumnWidth(0,320);self.tree.setExpandsOnDoubleClick(True)
         for column in (1,2,3):self.tree.hideColumn(column)
+        self.tree.expanded.connect(self.fit_tree);self.tree.collapsed.connect(self.fit_tree)
         self.tree.clicked.connect(lambda index:panel.navigate(self.fs.filePath(index)))
         self.fs.directoryLoaded.connect(lambda path:self.sync() if self.panel.folder and (os.path.normcase(self.panel.folder)==os.path.normcase(path) or os.path.normcase(self.panel.folder).startswith(os.path.normcase(path).rstrip('\\/')+os.sep)) else None);self.refresh_quick()
         for view in (self.tree,self.quick):
@@ -109,4 +114,11 @@ class NavigationPane(QWidget):
         parent=index.parent()
         while parent.isValid():self.tree.expand(parent);parent=parent.parent()
         if self.tree.currentIndex()!=index:self.tree.setCurrentIndex(index)
-        self.tree.scrollTo(index,QAbstractItemView.ScrollHint.PositionAtCenter);self.tree.horizontalScrollBar().setValue(0)
+        self.tree.scrollTo(index,QAbstractItemView.ScrollHint.PositionAtCenter);self.fit_tree();self.reveal(index)
+    def fit_tree(self,*args):
+        """The name column follows its contents, so a deep folder scrolls sideways instead of losing its name."""
+        self.tree.resizeColumnToContents(0);self.tree.setColumnWidth(0,max(self.tree.columnWidth(0),self.tree.viewport().width()))
+    def reveal(self,index):
+        """Scroll sideways only when the current folder's name would otherwise sit outside the pane."""
+        bar=self.tree.horizontalScrollBar();bar.setValue(0);rect=self.tree.visualRect(index);step=self.tree.indentation()
+        if rect.left()+min(rect.width(),6*step)>self.tree.viewport().width():bar.setValue(max(0,rect.left()-3*step))
