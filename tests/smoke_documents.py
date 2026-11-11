@@ -251,16 +251,46 @@ w.show_archived.setChecked(False)
 for label,method in [('버전 이력','note_history'),('JSON 내보내기','export_note')]:
     with patch.object(w,method) as callback:
         menu=w.make_note_tree_menu(tree_item(second));next(a for a in menu.actions() if a.text()==label).trigger();assert w.note_id==second;callback.assert_called_once();menu.deleteLater()
-menu=w.make_note_tree_menu(tree_item(folder='/Characters/Clothes'));assert [a.text() for a in menu.actions()]==['이 폴더에 새 노트 만들기','','모두 펼치기','모두 접기'];menu.actions()[0].trigger();menu.deleteLater()
+menu=w.make_note_tree_menu(tree_item(folder='/Characters/Clothes'));assert [a.text() for a in menu.actions()]==['이 폴더에 새 노트 만들기','하위 폴더 만들기…','','새 폴더 만들기…','','모두 펼치기','모두 접기'];menu.actions()[0].trigger();menu.deleteLater()
 assert w.note_category.currentText()=='Characters/Clothes';count=len(w.store.note_entries());w.save_draft();assert w.note_id is None and len(w.store.note_entries())==count
 w.new_folder_note('/미분류');assert not w.note_category.currentText()
-menu=w.make_note_tree_menu(None);assert [a.text() for a in menu.actions()]==['새 노트','','모두 펼치기','모두 접기'];menu.actions()[-1].trigger();menu.deleteLater()
+menu=w.make_note_tree_menu(None);assert [a.text() for a in menu.actions()]==['새 노트','새 폴더 만들기…','','모두 펼치기','모두 접기'];menu.actions()[-1].trigger();menu.deleteLater()
 assert '/Characters/Clothes' in w.store.state('note_tree')['collapsed']
 # Re-selecting the current note on refresh must not re-expand its collapsed folder, visibly or on the next show.
 w.open_note_id(second);w.refresh_notes();w.notes.setCurrentItem(tree_item(second));tree_item(folder='/Other').setExpanded(False);app.processEvents()
 w.refresh_notes();app.processEvents();assert not tree_item(folder='/Other').isExpanded()
 w.main_tabs.setCurrentIndex(1);app.processEvents();w.refresh_notes();w.main_tabs.setCurrentIndex(2);app.processEvents()
 assert not tree_item(folder='/Other').isExpanded() and '/Other' in w.store.state('note_tree')['collapsed']
+# Folders made from the menu are listed without a note, are offered as a category and keep the collapsed state.
+def menu_texts(item):
+    menu=w.make_note_tree_menu(item);texts=[a.text() for a in menu.actions()];menu.deleteLater();return texts
+def pick(item,label,name='',ok=True):
+    with patch('bmk_studio.app.QInputDialog.getText',return_value=(name,ok)):
+        menu=w.make_note_tree_menu(item);next(a for a in menu.actions() if a.text()==label).trigger();menu.deleteLater()
+collapsed=w.store.state('note_tree')['collapsed'];pick(None,'새 폴더 만들기…',' Poses ')
+assert w.store.state('note_tree')=={'collapsed':collapsed,'folders':['Poses']} and tree_item(folder='/Poses').text(1)=='0'
+assert w.notes.currentItem().data(0,Qt.ItemDataRole.UserRole+1)=='/Poses' and w.note_category.findText('Poses')>=0 and '만들었습니다' in w.statusBar().currentMessage()
+assert menu_texts(tree_item(folder='/Poses'))==['이 폴더에 새 노트 만들기','하위 폴더 만들기…','빈 폴더 지우기','','새 폴더 만들기…','','모두 펼치기','모두 접기']
+assert menu_texts(tree_item(folder='/미분류') or tree_item(folder='/Other'))[1]!='빈 폴더 지우기'
+pick(tree_item(folder='/Poses'),'하위 폴더 만들기…','Standing\\Arms')
+assert w.store.state('note_tree')['folders']==['Poses','Poses/Standing/Arms'] and tree_item(folder='/Poses/Standing/Arms').parent().data(0,Qt.ItemDataRole.UserRole+1)=='/Poses/Standing'
+assert '빈 폴더 지우기' not in menu_texts(tree_item(folder='/Poses')) and '빈 폴더 지우기' not in menu_texts(tree_item(folder='/Poses/Standing'))
+# Existing folders, an empty or cancelled name and the name of the unsorted group add nothing.
+for name,ok in (('Poses',True),('Other',True),('Poses/Standing',True),(' / ',True),('ignored',False),('미분류/x',True)):
+    pick(None,'새 폴더 만들기…',name,ok);assert w.store.state('note_tree')=={'collapsed':collapsed,'folders':['Poses','Poses/Standing/Arms']}
+assert '미분류' in w.statusBar().currentMessage()
+# A search lists matching notes only; making a folder clears it to show the folder.
+w.note_search.setText('tree second');assert tree_item(folder='/Poses') is None and tree_item(second)
+pick(None,'새 폴더 만들기…','Later');assert not w.note_search.text() and tree_item(folder='/Later') and tree_item(folder='/Poses')
+# Only an empty made folder can be taken off the list; its parent stays, and a folder with a note is kept.
+pick(tree_item(folder='/Poses/Standing/Arms'),'빈 폴더 지우기')
+assert w.store.state('note_tree')['folders']==['Later','Poses','Poses/Standing'] and tree_item(folder='/Poses/Standing/Arms') is None and tree_item(folder='/Poses/Standing')
+count=len(w.store.note_entries());pick(tree_item(folder='/Later'),'이 폴더에 새 노트 만들기');assert w.note_category.currentText()=='Later' and len(w.store.note_entries())==count
+later=w.store.save_note('in later',{'prompt':'later'},category='Later');w.refresh_notes()
+assert tree_item(folder='/Later').text(1)=='1' and '빈 폴더 지우기' not in menu_texts(tree_item(folder='/Later'))
+w.remove_note_folder('Later');assert 'Later' in w.store.state('note_tree')['folders']
+w.store.archive_note(later,True);w.refresh_notes();assert tree_item(folder='/Later').text(1)=='0';pick(tree_item(folder='/Later'),'빈 폴더 지우기')
+assert w.store.state('note_tree')['folders']==['Poses','Poses/Standing'] and tree_item(folder='/Later') is None and w.store.note(later)[3]=='Later'
 # Ctrl+N and Ctrl+Shift+T from the image screen keep the image editor's undo history, like a normal tab switch.
 w.main_tabs.setCurrentIndex(1);w.load(path);app.processEvents();w.draft.insertPlainText(' image edit');assert w.draft.document().isUndoAvailable()
 tabs=w.note_tabs.count();w.note_shortcuts['Ctrl+N'].trigger();assert w.main_tabs.currentIndex()==2 and w.note_tabs.count()==tabs+1 and w.note_id is None

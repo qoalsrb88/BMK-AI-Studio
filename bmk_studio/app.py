@@ -834,16 +834,22 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         autoscroll=self.notes.hasAutoScroll();self.notes.setAutoScroll(False)
         self.notes.clear()
         folders={};counts={};folder_icon=icon('folder');note_icon=icon('note')
-        for record in self.store.note_entries(self.note_search.text(),self.show_archived.isChecked()):
-            nid,title,body,category,archived=record
+        def folder_for(category,count):
             parent=self.notes.invisibleRootItem();path=''
             for part in (category.split('/') if category else ['미분류']):
                 path=path+'/'+part
                 if path not in folders:
                     folder=QTreeWidgetItem([part,'']);folder.setIcon(0,folder_icon);folder.setData(0,Qt.ItemDataRole.UserRole+1,path);parent.addChild(folder);folders[path]=folder;folder.setExpanded(searching or path not in collapsed)
-                counts[path]=counts.get(path,0)+1;parent=folders[path]
+                counts[path]=counts.get(path,0)+count;parent=folders[path]
+            return parent
+        for record in self.store.note_entries(self.note_search.text(),self.show_archived.isChecked()):
+            nid,title,body,category,archived=record
+            parent=folder_for(category,1)
             item=QTreeWidgetItem([title,'']);item.setIcon(0,note_icon);item.setData(0,Qt.ItemDataRole.UserRole,nid);parent.addChild(item)
             if nid==selected_id:self.notes.setCurrentItem(item)
+        # Folders made from the menu hold no note yet; a search shows matching notes only.
+        if not searching:
+            for category in self.note_folders():folder_for(category,0)
         muted=QColor(tokens()['muted'])
         for path,folder in folders.items():
             folder.setText(1,str(counts.get(path,0)));folder.setForeground(1,muted);folder.setTextAlignment(1,Qt.AlignmentFlag.AlignRight|Qt.AlignmentFlag.AlignVCenter)
@@ -851,11 +857,19 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         self.notes.doItemsLayout();self.notes.verticalScrollBar().setValue(scroll);self.notes.setAutoScroll(autoscroll)
         del blocker
         current=self.note_category.currentText();self.note_category.blockSignals(True);self.note_category.clear()
-        self.note_category.addItems(['']+sorted({r[3] for r in self.store.note_entries() if r[3]}));self.note_category.setCurrentText(current);self.note_category.blockSignals(False)
+        self.note_category.addItems(['']+sorted({r[3] for r in self.store.note_entries() if r[3]}|set(self.note_folders())));self.note_category.setCurrentText(current);self.note_category.blockSignals(False)
         self.update_note_shortcuts()
     def collapsed_note_folders(self):
         state=self.store.state('note_tree');values=state.get('collapsed') if isinstance(state,dict) else None
         return {key for key in values if isinstance(key,str)} if isinstance(values,list) else set()
+    def note_folders(self):
+        """Categories made from the tree menu; they stay listed while no note is in them."""
+        state=self.store.state('note_tree');values=state.get('folders') if isinstance(state,dict) else None
+        if not isinstance(values,list):return []
+        return [category for category in dict.fromkeys(normalize_category(value) for value in values if isinstance(value,str)) if category]
+    def store_note_tree(self,collapsed=None,folders=None):
+        collapsed=self.collapsed_note_folders() if collapsed is None else collapsed;folders=self.note_folders() if folders is None else folders
+        self.store.state('note_tree',{'collapsed':sorted(collapsed),**({'folders':sorted(folders)} if folders else {})})
     def save_note_tree(self,item):
         if self.note_search.text():return
         key=item.data(0,Qt.ItemDataRole.UserRole+1)
@@ -863,7 +877,40 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         collapsed=self.collapsed_note_folders()
         if item.isExpanded():collapsed.discard(key)
         else:collapsed.add(key)
-        self.store.state('note_tree',{'collapsed':sorted(collapsed)})
+        self.store_note_tree(collapsed=collapsed)
+    def note_folder_item(self,path):
+        def visit(parent):
+            for i in range(parent.childCount()):
+                item=parent.child(i)
+                if item.data(0,Qt.ItemDataRole.UserRole+1)==path:return item
+                found=visit(item)
+                if found:return found
+        return visit(self.notes.invisibleRootItem())
+    def note_folder_used(self,category):
+        """True while a listed note or another made folder sits in this category or below it."""
+        below=category+'/'
+        return any(record[3]==category or record[3].startswith(below) for record in self.store.note_entries()) or any(folder.startswith(below) for folder in self.note_folders())
+    def new_note_folder(self,parent=''):
+        parent=normalize_category(parent)
+        name,ok=QInputDialog.getText(self,'하위 폴더 만들기' if parent else '새 폴더 만들기',f'"{parent}" 안에 만들 폴더 이름' if parent else '폴더 이름 (예: 캐릭터 또는 캐릭터/의상)')
+        category=normalize_category(parent+'/'+name) if ok else ''
+        if not category or category==parent:return
+        if category.split('/')[0]=='미분류':
+            self.statusBar().showMessage('"미분류"는 폴더가 없는 노트를 모아 보여 주는 이름이라 최상위 폴더 이름으로 쓸 수 없습니다.');return
+        made=category not in self.note_folders() and not self.note_folder_used(category)
+        if made:self.store_note_tree(folders=self.note_folders()+[category])
+        # The new folder is not a search result, so the search is cleared to show it.
+        if self.note_search.text():self.note_search.clear()
+        self.refresh_notes();item=self.note_folder_item('/'+category)
+        if item:self.notes.setCurrentItem(item);self.notes.scrollToItem(item)
+        waits=' ComfyUI 노트 폴더에는 노트를 넣으면 생깁니다.' if self.note_sync_enabled() else ''
+        self.statusBar().showMessage(f'"{category}" 폴더를 만들었습니다.'+waits if made else f'"{category}" 폴더는 이미 있습니다.')
+    def remove_note_folder(self,category):
+        if self.note_folder_used(category):return
+        folders=[folder for folder in self.note_folders() if folder!=category];parent=category.rpartition('/')[0]
+        # The parent was shown only through this folder; it stays as an empty folder of its own.
+        if parent and parent not in folders:folders.append(parent)
+        self.store_note_tree(folders=folders);self.refresh_notes();self.statusBar().showMessage(f'빈 "{category}" 폴더를 목록에서 지웠습니다.')
     def expand_note_folders(self,expanded):
         def visit(parent):
             for i in range(parent.childCount()):
@@ -882,7 +929,13 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         else:
             if item:
                 path=item.data(0,Qt.ItemDataRole.UserRole+1);menu.addAction('이 폴더에 새 노트 만들기',lambda:self.new_folder_note(path))
+                category='' if path=='/미분류' else path.lstrip('/')
+                if category:
+                    menu.addAction('하위 폴더 만들기…',lambda:self.new_note_folder(category))
+                    if category in self.note_folders() and not self.note_folder_used(category):menu.addAction('빈 폴더 지우기',lambda:self.remove_note_folder(category))
+                menu.addSeparator()
             else:menu.addAction(self.note_shortcuts['Ctrl+N'])
+            menu.addAction('새 폴더 만들기…',lambda:self.new_note_folder())
             menu.addSeparator();menu.addAction('모두 펼치기',lambda:self.expand_note_folders(True));menu.addAction('모두 접기',lambda:self.expand_note_folders(False))
         return menu
     def note_tree_context_menu(self,pos):
