@@ -24,6 +24,11 @@ PATHS = {
     'chevron-right': '<path d="m9 6 6 6-6 6"/>',
     'close': '<path d="M6 6l12 12M18 6 6 18"/>',
     'check': '<path d="m5 12 5 5L20 7"/>',
+    'arrow-left': '<path d="M19 12H5M11 6l-6 6 6 6"/>',
+    'arrow-right': '<path d="M5 12h14M13 6l6 6-6 6"/>',
+    'arrow-up': '<path d="M12 19V5M6 11l6-6 6 6"/>',
+    'refresh': '<path d="M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.5 4.5L20 16M20 20v-4h-4"/>',
+    'star': '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z"/>',
     'fit': '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
     'eye': '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
 }
@@ -80,9 +85,11 @@ def decorate(button, name):
     button.setIcon(icon(name, color)); button.setIconSize(QSize(18, 18) if button.property('role') != 'section' else QSize(14, 14))
 
 
-def ghost(button):
-    """Icon-only or low-emphasis button: no fill or border until hovered."""
-    button.setProperty('ghost', True); return button
+def ghost(button, labelled=False):
+    """Icon-only or low-emphasis button: no fill or border until hovered. `labelled` gives a text button room around its label."""
+    button.setProperty('ghost', True)
+    if labelled: button.setProperty('labelled', True)
+    return button
 
 
 def caption(text, role='muted'):
@@ -163,6 +170,7 @@ def stylesheet(t):
     QPushButton[primary="true"]:pressed {{ background:{accent_pressed}; border-color:{accent_pressed}; }}
     QPushButton[primary="true"]:disabled {{ background:{surface2}; color:{disabled}; border-color:{border}; }}
     QPushButton[ghost="true"] {{ background:transparent; border:1px solid transparent; padding:4px; }}
+    QPushButton[ghost="true"][labelled="true"] {{ padding:6px 8px; }}
     QPushButton[ghost="true"]:hover {{ background:{surface2}; }}
     QPushButton[ghost="true"]:pressed {{ background:{selected}; }}
     QPushButton[ghost="true"]:checked {{ background:{selected}; border-color:{border}; }}
@@ -188,6 +196,12 @@ def stylesheet(t):
     QTabBar::tab:hover {{ color:{fg}; }}
     QTabBar::tab:selected {{ color:{fg}; border-bottom:2px solid {accent}; font-weight:600; }}
     QTabBar#mainNav::tab {{ font-size:14px; padding:9px 14px; }}
+    QTabBar#segment::tab {{ background:{surface}; color:{muted}; border:1px solid {border}; padding:5px 12px; margin:0 0 0 -1px; font-weight:400; }}
+    QTabBar#segment[tight="true"]::tab {{ padding:5px 7px; }}
+    QTabBar#segment::tab:first, QTabBar#segment::tab:only-one {{ margin-left:0; border-top-left-radius:6px; border-bottom-left-radius:6px; }}
+    QTabBar#segment::tab:last, QTabBar#segment::tab:only-one {{ border-top-right-radius:6px; border-bottom-right-radius:6px; }}
+    QTabBar#segment::tab:hover {{ background:{surface2}; color:{fg}; }}
+    QTabBar#segment::tab:selected {{ background:{selected}; color:{fg}; border:1px solid {border}; font-weight:400; }}
     QTabBar::close-button {{ image:url({close}); width:12px; height:12px; margin:2px; border-radius:3px; }}
     QTabBar::close-button:hover {{ background:{surface2}; }}
     QListView::item, QTreeView::item, QListWidget::item, QTreeWidget::item {{ padding:5px 4px; border-radius:4px; }}

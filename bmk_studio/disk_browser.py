@@ -7,7 +7,7 @@ from PySide6.QtGui import QPixmap,QIcon,QColor,QAction,QKeySequence
 from PySide6.QtWidgets import (QWidget,QVBoxLayout,QLineEdit,QComboBox,QLabel,QListView,QAbstractItemView,QSplitter,QPlainTextEdit,QFileDialog,QSlider,QTabWidget,QStyle,QMenu)
 from .core import EXTENSIONS,load_image,inspect_image,json_text,file_stamp
 from .workspace import line,action,bar
-from .appearance import CANVAS,caption,ElidedLabel
+from .appearance import CANVAS,caption,ElidedLabel,decorate,ghost
 from .prompt_highlight import PromptEdit
 from .cards import caption_height
 from .explorer_navigation import ExplorerView,NavigationPane
@@ -68,12 +68,16 @@ class DiskBrowser(QWidget):
         self.cache=owner.store.root/'folder-thumbnails';self.state=owner.store.state('disk_browser') or {}
         layout=QVBoxLayout(self);layout.setContentsMargins(0,0,0,0)
         self.address=QLineEdit();self.address.setPlaceholderText('폴더 주소 입력 후 Enter · 예: H:\\Images');self.address.setAccessibleName('폴더 탐색 주소')
-        self.back=action('←',lambda:self.travel(-1));self.back.setToolTip('뒤로');self.forward=action('→',lambda:self.travel(1));self.forward.setToolTip('앞으로')
-        layout.addWidget(line(self.back,self.forward,action('↑ 상위',lambda:self.navigate(str(Path(self.folder).parent)) if self.folder else None),self.address,action('이동',lambda:self.navigate(self.address.text())),action('폴더 선택',self.choose),action('새로고침',lambda:self.navigate(self.folder,refresh=True))))
+        self.back=action('',lambda:self.travel(-1));self.forward=action('',lambda:self.travel(1));self.up=action('',lambda:self.navigate(str(Path(self.folder).parent)) if self.folder else None);self.refresh=action('',lambda:self.navigate(self.folder,refresh=True))
+        for item,name,tip in ((self.back,'arrow-left','뒤로 · Alt+←'),(self.forward,'arrow-right','앞으로 · Alt+→'),(self.up,'arrow-up','상위 폴더 · Alt+↑'),(self.refresh,'refresh','새로고침 · F5')):
+            decorate(item,name);ghost(item);item.setFixedSize(32,32);item.setToolTip(tip);item.setAccessibleName(tip.split(' · ')[0])
+        # Enter in the address field navigates, so the row needs no separate go button.
+        layout.addWidget(bar(self.back,self.forward,self.up,self.refresh,(self.address,1),action('폴더 선택',self.choose)))
         self.favorites=QComboBox();self.favorites.setMinimumContentsLength(12);self.favorites.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon);self.favorites.setMaximumWidth(240);self.refresh_favorites();self.favorites.activated.connect(lambda i:self.navigate(self.favorites.itemData(i)) if i else None)
         self.search=QLineEdit();self.search.setPlaceholderText('현재 폴더의 이름 검색 · 하위 폴더 제외');self.sort=QComboBox();self.sort.addItems(['이름 ↑','이름 ↓','수정일 ↑','수정일 ↓','크기 ↑','크기 ↓'])
         self.add=action('선택 이미지를 라이브러리에 추가',self.add_selected);self.add.setProperty('primary',True);self.add.setEnabled(False)
-        layout.addWidget(line(self.favorites,action('☆ 경로 저장 / 해제',lambda:self.toggle_favorite()),self.search,self.sort,self.add))
+        self.favorite_button=action('경로 저장 / 해제',lambda:self.toggle_favorite());decorate(self.favorite_button,'star');self.favorite_button.setToolTip('현재 폴더를 즐겨찾는 경로에 넣거나 뺍니다')
+        layout.addWidget(bar(self.favorites,self.favorite_button,(self.search,1),self.sort,self.add))
         self.split=QSplitter();layout.addWidget(self.split,1)
         self.view=ExplorerView(self);self.view.setViewMode(QListView.ViewMode.IconMode);self.view.setMovement(QListView.Movement.Static);self.view.setResizeMode(QListView.ResizeMode.Adjust);self.view.setUniformItemSizes(True);self.view.setLayoutMode(QListView.LayoutMode.Batched);self.view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection);self.view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.model=DiskModel(self);self.proxy=DiskProxy(self);self.proxy.setSourceModel(self.model);self.view.setModel(self.proxy);self.navigation=NavigationPane(self);self.split.addWidget(self.navigation);self.split.addWidget(self.view)

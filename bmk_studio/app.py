@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
     QSplitter, QLabel, QPushButton, QLineEdit, QPlainTextEdit, QTabWidget, QListWidget,
     QListWidgetItem, QFileDialog, QMessageBox, QComboBox, QDoubleSpinBox, QSpinBox,
     QCheckBox, QGraphicsView, QGraphicsScene, QGraphicsRectItem, QAbstractItemView,
-    QDialog, QDialogButtonBox, QFormLayout, QProgressBar, QTreeWidget, QTreeWidgetItem, QScrollArea, QTabBar, QMenu, QSlider, QStackedWidget, QFrame, QHeaderView, QInputDialog)
+    QDialog, QDialogButtonBox, QFormLayout, QGridLayout, QProgressBar, QTreeWidget, QTreeWidgetItem, QScrollArea, QTabBar, QMenu, QSlider, QStackedWidget, QFrame, QHeaderView, QInputDialog)
 from . import shell_actions
 from .workspace import WorkspaceMixin, bar, PANES, SIDEBAR_WIDTH
 from .discovery_ui import DiscoveryMixin
@@ -299,41 +299,53 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         self.statusBar().showMessage('미리보기 보간 설정 저장 · 원본과 내보내기 픽셀은 변경되지 않습니다.',5000)
 
     def open_settings(self):
-        dialog=QDialog(self);dialog.setWindowTitle('전역 설정');layout=QFormLayout(dialog)
+        dialog=QDialog(self);dialog.setWindowTitle('전역 설정');dialog.setMinimumWidth(560);outer=QVBoxLayout(dialog)
+        # The rows scroll when the screen is shorter than the form; save and cancel stay in view below them.
+        page=QWidget();layout=QFormLayout(page);layout.setContentsMargins(0,0,8,0);area=QScrollArea();area.setWidgetResizable(True);area.setWidget(page)
+        area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff);outer.addWidget(area,1)
+        def note(text):
+            label=caption(text);label.setWordWrap(True);return label
         theme=QComboBox();theme.addItem('라이트 (기본)','light');theme.addItem('다크','dark');theme.setCurrentIndex(max(0,theme.findData(self.appearance.get('theme','light'))))
         interpolation=QComboBox();interpolation.addItem('부드럽게 · 일반 이미지','smooth');interpolation.addItem('필터 적용 안 함 · 도트 이미지','nearest');interpolation.setCurrentIndex(max(0,interpolation.findData(self.viewer.interpolation)))
         margin=QSpinBox();margin.setRange(0,50);margin.setSuffix(' %');margin.setValue(self.viewer.overscroll)
         recovery=QCheckBox('10초마다 변경된 편집을 백그라운드 복구본으로 저장');recovery.setChecked(self.appearance.get('auto_checkpoint',True))
+        # Rows are grouped by what they change; each group opens with a section caption.
+        layout.addRow(caption('화면','section'))
         layout.addRow('화면 테마',theme);layout.addRow('미리보기 보간',interpolation);layout.addRow('가장자리 이동 여유',margin)
-        layout.addRow('비정상 종료 복구',recovery)
+        layout.addRow(note('이동 여유는 화면 크기 기준이며 이미지 크기의 절반을 넘지 않습니다. 미리보기 우클릭으로도 보간을 변경할 수 있습니다. 설정은 다음 실행에도 유지됩니다.'))
+        layout.addRow(caption('노트','section'))
         tab_limit=QSpinBox();tab_limit.setRange(0,50);tab_limit.setSpecialValueText('제한 없음');tab_limit.setSuffix('개');tab_limit.setAccessibleName('열린 노트 탭 최대 개수')
         try:tab_limit.setValue(int(self.appearance.get('note_tab_limit',0)))
         except (TypeError,ValueError):pass
         tab_limit.setToolTip('넘치면 오래 사용하지 않은 노트 탭부터 닫습니다. Ctrl+Shift+T로 다시 열 수 있습니다.');layout.addRow('열린 노트 탭 최대 개수',tab_limit)
-        current_data=QLineEdit(str(self.store.root));current_data.setReadOnly(True);layout.addRow('사용자 데이터 폴더',current_data)
-        change_data=button('사용자 데이터 폴더 변경…',lambda:dialog.reject() if self.change_data_directory() else None);layout.addRow(change_data)
-        if data_location.session_directory or os.environ.get('BMK_STUDIO_DATA','').strip():
-            change_data.setEnabled(False);layout.addRow(QLabel('실행 옵션 또는 BMK_STUDIO_DATA로 경로를 지정했습니다.\n설정에서 변경하려면 해당 경로 지정을 해제하고 실행하세요.'))
-        def updates():
-            from .update_dialog import UpdateDialog
-            UpdateDialog(dialog).exec()
-        layout.addRow(button('업데이트 확인 / 배포 페이지…',updates))
+        layout.addRow(caption('편집과 내보내기','section'));layout.addRow('비정상 종료 복구',recovery)
         naming=QLineEdit(self.appearance.get('export_pattern','{source}_edited'));layout.addRow('내보내기 이름 규칙',naming)
         name_preview=QLabel();name_preview.setWordWrap(True);layout.addRow('이름 미리보기',name_preview)
         def preview_name():
             try:name_preview.setText(export_stem(naming.text(),self.path or 'image.png',self.current.size if self.current else (1024,1024),self.note_title.text())+'.png')
             except ValueError as exc:name_preview.setText(str(exc))
         naming.textChanged.connect(preview_name);preview_name()
-        layout.addRow(QLabel('{source} {date} {time} {width} {height} {note} · 금지 문자는 자동 정리'))
-        hint=QLabel('이동 여유는 화면 크기 기준이며 이미지 크기의 절반을 넘지 않습니다.\n미리보기 우클릭으로도 보간을 변경할 수 있습니다.\n설정은 다음 실행에도 유지됩니다.');hint.setWordWrap(True);layout.addRow(hint)
+        layout.addRow(note('{source} {date} {time} {width} {height} {note} · 금지 문자는 자동 정리'))
+        layout.addRow(caption('데이터와 업데이트','section'))
+        current_data=QLineEdit(str(self.store.root));current_data.setReadOnly(True);layout.addRow('사용자 데이터 폴더',current_data)
+        change_data=button('사용자 데이터 폴더 변경…',lambda:dialog.reject() if self.change_data_directory() else None);layout.addRow('',bar(change_data,None))
+        if data_location.session_directory or os.environ.get('BMK_STUDIO_DATA','').strip():
+            change_data.setEnabled(False);layout.addRow(note('실행 옵션 또는 BMK_STUDIO_DATA로 경로를 지정했습니다. 설정에서 변경하려면 해당 경로 지정을 해제하고 실행하세요.'))
+        def updates():
+            from .update_dialog import UpdateDialog
+            UpdateDialog(dialog).exec()
+        layout.addRow('업데이트',bar(button('업데이트 확인 / 배포 페이지…',updates),None))
+        layout.addRow(caption('ComfyUI 노트 폴더 동기화','section'))
         sync_values,sync_problem=self.note_sync_settings_rows(layout,dialog)
         controls=QDialogButtonBox(QDialogButtonBox.StandardButton.Save|QDialogButtonBox.StandardButton.Cancel)
+        controls.button(QDialogButtonBox.StandardButton.Save).setText('저장');controls.button(QDialogButtonBox.StandardButton.Cancel).setText('취소')
         def accept_settings():
             try:export_stem(naming.text(),'image.png',(1024,1024))
             except ValueError as exc:self.error(str(exc));return
             if sync_problem():self.error(sync_problem());return
             dialog.accept()
-        controls.accepted.connect(accept_settings);controls.rejected.connect(dialog.reject);layout.addRow(controls)
+        controls.accepted.connect(accept_settings);controls.rejected.connect(dialog.reject);outer.addWidget(controls)
+        dialog.resize(580,min(page.sizeHint().height()+controls.sizeHint().height()+48,self.screen().availableGeometry().height()-80))
         if dialog.exec()==QDialog.DialogCode.Accepted:
             self.appearance.update(theme=theme.currentData(),interpolation=interpolation.currentData(),overscroll=margin.value())
             self.appearance['auto_checkpoint']=recovery.isChecked()
@@ -379,9 +391,13 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         # One header row: brand, main navigation (inserted by build_main_tabs), then natural-width global actions.
         header=QFrame();header.setObjectName('header');self.header_layout=QHBoxLayout(header);self.header_layout.setContentsMargins(0,0,0,8);self.header_layout.setSpacing(8)
         self.header_layout.addWidget(title);self.header_layout.addWidget(self.workspace_mode);self.header_layout.addStretch(1)
-        for text,fn,name in (('이미지 추가',self.open_file,'image'),('폴더 추가',self.open_folder,'folder'),('붙여넣기',self.paste,'paste'),
-                             ('작업 폴더',lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.store.root))),'external')):
-            item=button(text,fn);decorate(item,name);self.header_layout.addWidget(item)
+        # Adding images is the header's main job; paste and the data folder stay one click away without a frame.
+        # The image actions are hidden on the note page (apply_main_visibility), where they have nothing to act on.
+        self.image_actions=[]
+        for text,fn,name,tip in (('이미지 추가',self.open_file,'image','Ctrl+O'),('폴더 추가',self.open_folder,'folder',''),('붙여넣기',self.paste,'paste','클립보드 이미지 붙여넣기 · Ctrl+Shift+V'),
+                             ('작업 폴더',lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.store.root))),'external','사용자 데이터 폴더 열기 · 내보내기 기본 위치')):
+            item=button(text,fn);ghost(item,True) if name in ('paste','external') else None;decorate(item,name);item.setToolTip(tip);self.header_layout.addWidget(item)
+            if name!='external':self.image_actions.append(item)
         self.header_layout.addWidget(self.settings_button);outer.addWidget(header)
         splitter = QSplitter();self.main_splitter=splitter
         outer.addWidget(splitter,1)
@@ -406,7 +422,8 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         self.library.searching.connect(lambda active:self.library_status.setText('디스크 검색 중…' if active else f'{self.library.proxy.rowCount()} / {self.library.count()}개 이미지'))
         self.note_browser=QWidget();nl=QVBoxLayout(self.note_browser);nl.setContentsMargins(0,0,8,0)
         nl.addWidget(caption('프롬프트 노트','section'))
-        self.note_search=QLineEdit();self.note_search.setPlaceholderText('노트만 검색');self.note_search.textChanged.connect(self.refresh_notes);nl.addWidget(self.note_search)
+        self.note_search=QLineEdit();self.note_search.setPlaceholderText('노트만 검색');self.note_search.textChanged.connect(self.refresh_notes)
+        self.new_note_button=button('새 노트',self.new_note);self.new_note_button.setToolTip('새 노트 · Ctrl+N');nl.addWidget(bar((self.note_search,1),self.new_note_button))
         self.notes = QTreeWidget();self.notes.setHeaderHidden(True); self.notes.itemClicked.connect(self.open_note); self.notes.itemActivated.connect(self.keep_note); nl.addWidget(self.notes,2)
         # Arrow keys browse like clicks; a short delay skips the notes passed while a key is held down.
         self.notes.installEventFilter(self);self.note_preview_timer=QTimer(self);self.note_preview_timer.setSingleShot(True);self.note_preview_timer.setInterval(80);self.note_preview_timer.timeout.connect(self.preview_tree_current)
@@ -417,9 +434,9 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         # Column 1 carries the note count per folder; icons distinguish folders from documents.
         self.notes.setColumnCount(2);self.notes.setIconSize(QSize(16,16));self.notes.header().setStretchLastSection(False)
         self.notes.header().setSectionResizeMode(0,QHeaderView.ResizeMode.Stretch);self.notes.header().setSectionResizeMode(1,QHeaderView.ResizeMode.ResizeToContents)
-        self.show_archived=QCheckBox('보관함 보기');self.show_archived.toggled.connect(self.refresh_notes);nl.addWidget(self.show_archived)
-        nl.addWidget(row(button('노트 가져오기',self.import_notes),button('새 노트',self.new_note)))
-        nl.addWidget(button('노트 폴더 가져오기',self.import_note_folder));self.build_note_sync(nl)
+        self.show_archived=QCheckBox('보관함 보기');self.show_archived.toggled.connect(self.refresh_notes)
+        self.note_import=QPushButton('가져오기');imports=QMenu(self.note_import);imports.addAction('노트 파일 가져오기…',self.import_notes);imports.addAction('노트 폴더 가져오기…',self.import_note_folder);self.note_import.setMenu(imports)
+        nl.addWidget(bar(self.show_archived,None,self.note_import));self.build_note_sync(nl)
         self.notes.setMinimumHeight(150)
         sidebar=QScrollArea();sidebar.setWidgetResizable(True);sidebar.setWidget(left);self.sidebar=sidebar;splitter.addWidget(sidebar)
         # Wide enough for the widest row plus the vertical bar, so opening a section never brings a horizontal bar.
@@ -478,8 +495,12 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         self.note_tabs.setMovable(True);self.note_tabs.tabMoved.connect(self.note_tab_moved);self.note_tabs.installEventFilter(self)
         self.note_tabs.tabBarDoubleClicked.connect(self.promote_preview)
         wl.addWidget(self.note_tabs)
-        self.note_title=QLineEdit(); self.note_title.setPlaceholderText('프로젝트 / 캐릭터 / 노트 이름'); wl.addWidget(self.note_title)
-        self.note_category=QComboBox();self.note_category.setEditable(True);self.note_category.setPlaceholderText('카테고리 (예: 캐릭터/의상)');wl.addWidget(self.note_category)
+        self.note_title=QLineEdit(); self.note_title.setPlaceholderText('프로젝트 / 캐릭터 / 노트 이름')
+        # An editable combo only shows a placeholder that is set on its line edit.
+        self.note_category=QComboBox();self.note_category.setEditable(True);self.note_category.lineEdit().setPlaceholderText('예: 캐릭터/의상')
+        self.note_heading=QWidget();heading=QGridLayout(self.note_heading);heading.setContentsMargins(0,0,0,0);heading.setHorizontalSpacing(8);heading.setVerticalSpacing(4)
+        heading.addWidget(caption('제목','field'),0,0);heading.addWidget(caption('분류 (폴더)','field'),0,1);heading.addWidget(self.note_title,1,0);heading.addWidget(self.note_category,1,1)
+        heading.setColumnStretch(0,3);heading.setColumnStretch(1,2);wl.addWidget(self.note_heading)
         self.draft=PromptEdit(); self.draft.setPlaceholderText('다음 생성에 사용할 프롬프트');self.work_prompt_header=self.prompt_header('작업 프롬프트',self.draft);wl.addWidget(self.work_prompt_header); wl.addWidget(self.draft,4)
         self.draft_negative=PromptEdit(); self.draft_negative.setPlaceholderText('작업 네거티브');self.work_negative_header=self.prompt_header('작업 네거티브',self.draft_negative);wl.addWidget(self.work_negative_header); wl.addWidget(self.draft_negative,2)
         # Read-only LoRA line, shown only for a note that keeps LoRA settings; same order as the ComfyUI notes node.
@@ -492,17 +513,18 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         self.memo=QPlainTextEdit(); self.memo.setPlaceholderText('설정·서비스·작업 메모'); wl.addWidget(caption('메모','field')); wl.addWidget(self.memo,2)
         self.conversion=QComboBox(); self.conversion.addItems(BMKPromptSyntaxConverter.MODES);self.conversion.setMinimumContentsLength(10);self.conversion.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         # Prompt tools act on the text above; document actions sit below with the primary save on the right.
-        wildcards=button('와일드카드',self.expand_work_wildcards);wildcards.setToolTip('와일드카드 편집 / 확장')
-        snippets=button('조각 보관함',self.prompt_snippets);snippets.setToolTip('프롬프트 조각 보관함 · 기존 노트에서 가져오기')
-        dedupe=button('중복 정리',self.dedupe);dedupe.setToolTip('중복 태그 정리 · 가중치 문법이 없는 평문 태그에만 적용')
-        wl.addWidget(flow(self.conversion,button('문법 변환',self.convert),wildcards,snippets,dedupe))
+        # Conversion stays one click; the other prompt tools share a menu, so the row is one line at any panel width.
+        self.prompt_tools=QPushButton('도구');tools=QMenu(self.prompt_tools);tools.setToolTipsVisible(True);self.prompt_tools.setMenu(tools)
+        for label,fn,tip in (('와일드카드 편집 / 확장…',self.expand_work_wildcards,''),('조각 보관함 · 기존 노트에서 가져오기…',self.prompt_snippets,''),
+                             ('중복 태그 정리',self.dedupe,'가중치 문법이 없는 평문 태그에만 적용')):tools.addAction(label,fn).setToolTip(tip)
+        wl.addWidget(bar(self.conversion,button('문법 변환',self.convert),None,self.prompt_tools))
         self.note_save_button=button('노트 저장',self.save_note,True)
         self.note_history_button=button('버전 이력',self.note_history);self.note_history_button.setToolTip('버전 이력 / 복원')
         self.note_archive_button=button('보관 / 복구',self.archive_current_note)
         self.note_more=QPushButton('더 보기');more=QMenu(self.note_more);more.addAction('JSON 내보내기',self.export_note);more.addAction('BMK 추가 필드',self.edit_note_fields);more.addAction('전체 JSON 편집',self.edit_note_json);self.note_more.setMenu(more)
         self.image_note_save=button('노트에 저장…',self.save_image_to_note)
         self.note_actions=bar(self.image_note_save,None,self.note_history_button,self.note_archive_button,self.note_more,self.note_save_button);wl.addWidget(self.note_actions)
-        self.note_only_controls=[self.note_tabs,self.note_title,self.note_category,self.note_save_button,self.note_history_button,self.note_archive_button,self.note_more]
+        self.note_only_controls=[self.note_tabs,self.note_heading,self.note_title,self.note_category,self.note_save_button,self.note_history_button,self.note_archive_button,self.note_more]
         ol.addWidget(button('노트에 저장…',self.save_image_to_note))
         self.tabs.addTab(work,'작업 프롬프트')
         tags=QWidget(); tl=QVBoxLayout(tags)
@@ -526,21 +548,26 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         self.exclude=QLineEdit();self.exclude.setPlaceholderText('제외 태그 (콤마 구분)');self.exclude.textChanged.connect(self.render_tags);tl.addWidget(self.exclude)
         self.tag_button=button('현재 원본 태깅',self.run_tags,True)
         self.batch_button=button('선택 이미지 일괄 태깅',self.run_selected_tags)
-        tl.addWidget(row(self.tag_button,self.batch_button))
-        tl.addWidget(row(button('선택을 대기열에 추가',self.enqueue_selected),button('대기열 관리',self.open_queue)))
+        self.queue_button=QPushButton('대기열');queue=QMenu(self.queue_button);queue.addAction('선택 이미지를 대기열에 추가',self.enqueue_selected);queue.addAction('대기열 관리…',self.open_queue);self.queue_button.setMenu(queue)
+        tl.addWidget(flow(self.tag_button,self.batch_button,self.queue_button))
         self.cancel_button=button('작업 취소',self.cancel_tags);self.cancel_button.setEnabled(False)
         self.tag_progress=QProgressBar();self.tag_progress.setRange(0,1);self.tag_progress.setValue(0)
         # Progress and cancel appear only while tagging runs.
         self.tag_progress_row=bar((self.tag_progress,1),self.cancel_button);self.tag_progress_row.hide();tl.addWidget(self.tag_progress_row)
         self.tag_list=HintListWidget('아직 추정 태그가 없습니다.\n모델 폴더를 지정하고 현재 원본 태깅을 누르면 결과가 여기에 표시됩니다.');self.tag_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection);tl.addWidget(self.tag_list,1)
-        tl.addWidget(row(button('표시 태그 복사',lambda:self.copy_text(self.tag_text())),button('선택 태그 추가',self.append_tags)))
+        tag_more=QPushButton('더 보기');more_tags=QMenu(tag_more);more_tags.addAction('노트에 저장…',self.save_image_to_note);more_tags.addAction('현재 추정 태그 JSON 내보내기…',self.export_tags);tag_more.setMenu(more_tags)
+        append=button('선택 태그 추가',self.append_tags);append.setToolTip('선택한 태그를 작업 프롬프트 끝에 추가')
+        tl.addWidget(bar(button('표시 태그 복사',lambda:self.copy_text(self.tag_text())),append,None,tag_more))
         self.tag_status=QLabel('WD v3 · GPU 자동 선택 · 임계값 변경 시 재추론 없음');self.tag_status.setWordWrap(True);tl.addWidget(self.tag_status)
-        self.job_log=QPlainTextEdit();self.job_log.setReadOnly(True);self.job_log.setMaximumBlockCount(200);self.job_log.setMaximumHeight(95);self.job_log.setPlaceholderText('일괄 처리 결과 / 오류');tl.addWidget(self.job_log)
-        tl.addWidget(row(button('노트에 저장…',self.save_image_to_note),button('현재 추정 태그 JSON 내보내기',self.export_tags)))
+        self.job_log=QPlainTextEdit();self.job_log.setReadOnly(True);self.job_log.setMaximumBlockCount(200);self.job_log.setMaximumHeight(95);self.job_log.setAccessibleName('일괄 처리 결과 / 오류');tl.addWidget(self.job_log)
+        # The log takes room only while it has something to say.
+        self.job_log.hide();self.job_log.textChanged.connect(lambda:self.job_log.setVisible(bool(self.job_log.toPlainText())))
         self.model_path.textChanged.connect(self.refresh_saved_tags)
         self.tabs.addTab(tags,'태깅')
         edit=QWidget(); edit_layout=QVBoxLayout(edit)
-        self.edit_tool=QComboBox();self.edit_tool.addItems(['크롭','크기 / 회전','스티치','톤 복원','고급 색상'])
+        # The five tools are all in view as one segmented row instead of behind a drop-down.
+        self.edit_tool=QTabBar();self.edit_tool.setObjectName('segment');self.edit_tool.setProperty('tight',True);self.edit_tool.setDrawBase(False);self.edit_tool.setUsesScrollButtons(False);self.edit_tool.setElideMode(Qt.TextElideMode.ElideRight)
+        for name in ('크롭','크기 / 회전','스티치','톤 복원','고급 색상'):self.edit_tool.addTab(name)
         edit_layout.addWidget(self.edit_tool);self.edit_pages=QStackedWidget();edit_layout.addWidget(self.edit_pages,1)
         crop_page=QWidget();el=QVBoxLayout(crop_page);self.edit_pages.addWidget(crop_page)
         self.crop_toggle=QCheckBox('크롭 영역 편집 · 드래그 / 이동 / 크기 조절');self.crop_toggle.toggled.connect(self.toggle_crop);el.addWidget(self.crop_toggle)
@@ -552,10 +579,11 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         el.addWidget(row(QLabel('스냅'),self.crop_snap,button('새 영역',self.new_crop_selection)))
         self.crop_info=QLabel('영역 내부: 이동 · 모서리: 크기 조절');el.addWidget(self.crop_info)
         hint=QLabel('바깥/Shift+드래그: 새 영역 · Alt: 스냅 해제\n휠: 확대 · Space+드래그/가운데 버튼: 화면 이동\n방향키: 스냅 단위 이동 · Esc: 현재 드래그 취소');hint.setWordWrap(True);el.addWidget(hint)
-        self.coords=[]
-        for name in ('X','Y','너비','높이'):
-            spin=QSpinBox();spin.setRange(0,100000);spin.setKeyboardTracking(False);spin.valueChanged.connect(self.coords_changed);self.coords.append(spin)
-            el.addWidget(row(QLabel(name),spin))
+        self.coords=[];box=QWidget();grid=QGridLayout(box);grid.setContentsMargins(0,0,0,0);grid.setHorizontalSpacing(8);grid.setVerticalSpacing(8)
+        for n,name in enumerate(('X','Y','너비','높이')):
+            spin=QSpinBox();spin.setRange(0,100000);spin.setKeyboardTracking(False);spin.valueChanged.connect(self.coords_changed);spin.setAccessibleName(name);self.coords.append(spin)
+            grid.addWidget(QLabel(name),n//2,n%2*2);grid.addWidget(spin,n//2,n%2*2+1)
+        grid.setColumnStretch(1,1);grid.setColumnStretch(3,1);el.addWidget(box)
         el.addWidget(button('크롭 적용',self.apply_crop,True))
         el.addStretch()
         resize_page=QWidget();el=QVBoxLayout(resize_page);self.edit_pages.addWidget(resize_page)
@@ -584,23 +612,25 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         el.addWidget(QLabel('원본의 색상 정보를 해석해 별도 작업본으로 변환합니다.'))
         el.addWidget(button('ICC / HDR 원본 색상 정규화',self.normalize_color));el.addStretch()
         for index in range(self.edit_pages.count()):self.edit_pages.widget(index).layout().setContentsMargins(0,0,0,0)
-        self.edit_tool.currentIndexChanged.connect(self.edit_pages.setCurrentIndex)
+        self.edit_tool.currentChanged.connect(self.edit_pages.setCurrentIndex)
         def change_tool(index):
             if index!=0:self.crop_toggle.setChecked(False)
             self.workspace_mode.setCurrentIndex(1)
-        self.edit_tool.currentIndexChanged.connect(change_tool)
+        self.edit_tool.currentChanged.connect(change_tool)
         self.crop_toggle.toggled.connect(lambda on:self.workspace_mode.setCurrentIndex(1) if on else None)
         scroll=QScrollArea();scroll.setWidgetResizable(True);scroll.setWidget(edit);self.tabs.addTab(scroll,'편집')
         # Leaving the edit tab ends crop editing so the handles do not linger over other tabs.
         self.tabs.currentChanged.connect(lambda index:self.crop_toggle.setChecked(False) if self.tabs.widget(index) is not scroll and self.crop_toggle.isChecked() else None)
         metadata_panel=QWidget();ml=QVBoxLayout(metadata_panel)
         self.generation_settings=QPlainTextEdit();self.generation_settings.setReadOnly(True);self.generation_settings.setMaximumHeight(190)
-        ml.addWidget(QLabel('파일에 기록된 생성 설정'));ml.addWidget(self.generation_settings)
+        ml.addWidget(caption('파일에 기록된 생성 설정','field'));ml.addWidget(self.generation_settings)
+        # Sampler branches exist only for ComfyUI workflow images; load() shows this block when the file has any.
+        self.branch_box=QWidget();bl=QVBoxLayout(self.branch_box);bl.setContentsMargins(0,0,0,0);bl.addWidget(caption('ComfyUI 샘플러 분기','field'))
         self.branch_choice=QComboBox();self.branch_choice.currentIndexChanged.connect(self.show_branch)
-        ml.addWidget(self.branch_choice)
-        self.branch_preview=QPlainTextEdit();self.branch_preview.setReadOnly(True);self.branch_preview.setMaximumHeight(170);ml.addWidget(self.branch_preview)
-        ml.addWidget(button('선택 분기의 정적 텍스트를 작업 프롬프트로 복사',self.use_branch))
-        self.raw=QPlainTextEdit();self.raw.setReadOnly(True);ml.addWidget(self.raw);self.tabs.addTab(metadata_panel,'메타정보')
+        bl.addWidget(self.branch_choice)
+        self.branch_preview=QPlainTextEdit();self.branch_preview.setReadOnly(True);self.branch_preview.setMaximumHeight(170);bl.addWidget(self.branch_preview)
+        bl.addWidget(button('선택 분기의 정적 텍스트를 작업 프롬프트로 복사',self.use_branch));self.branch_box.hide();ml.addWidget(self.branch_box)
+        self.raw=QPlainTextEdit();self.raw.setReadOnly(True);ml.addWidget(caption('전체 메타데이터','field'));ml.addWidget(self.raw,1);self.tabs.addTab(metadata_panel,'메타정보')
         from .disk_browser import DiskBrowser
         self.disk_browser=DiskBrowser(self,Viewer);self.disk_browser.hide();outer.addWidget(self.disk_browser,1)
         self.build_main_tabs(outer)
@@ -664,6 +694,7 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         self.branch_choice.clear();self.branch_choice.addItem('ComfyUI 샘플러 선택 — 실제 출력 분기 자동 확정 안 함',None)
         for branch in info['branches']:
             self.branch_choice.addItem(f"노드 {branch['node']} · {branch['type']}",branch)
+        self.branch_box.setVisible(bool(info['branches']))
         saved=self.store.asset(self.path)
         self.draft.setPlainText(saved[0] if saved else info['positive']);self.draft_negative.setPlainText(saved[1] if saved else info['negative']);self.memo.setPlainText(saved[2] if saved else '')
         self.note_title.setText(self.path.stem);self.loading=False

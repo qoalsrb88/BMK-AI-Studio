@@ -110,7 +110,7 @@ def favorite_present(path):
 popup(d.view,index('child'),'즐겨찾는 경로에 추가');assert favorite_present(str(folder/'child'))==(True,True)
 assert labels(popup(d.view,index('child')))[1]=='즐겨찾는 경로에서 제거'
 popup(d.view,index('child'),'즐겨찾는 경로에서 제거');assert favorite_present(str(folder/'child'))==(False,False)
-favorite_button=next(button for button in d.findChildren(QPushButton) if button.text()=='☆ 경로 저장 / 해제')
+favorite_button=d.favorite_button;assert favorite_button.text()=='경로 저장 / 해제'
 favorite_button.click();assert favorite_present(str(folder))==(False,False)
 favorite_button.click();assert favorite_present(str(folder))==(True,True)
 popup(d.view,choose='즐겨찾는 경로에서 제거');assert favorite_present(str(folder))==(False,False)
@@ -175,7 +175,7 @@ QTest.keyClick(d.view,Qt.Key.Key_Escape);d.view.clearSelection()
 d.navigate(d.folder,refresh=True);wait(lambda:not d.scan_job);assert select_context.call_count>0
 d.activate(index('child'));wait(lambda:d.folder==str(folder/'child') and not d.scan_job);assert len(d.model.rows)==1
 d.back.click();wait(lambda:d.folder==str(folder) and not d.scan_job);d.forward.click();wait(lambda:d.folder==str(folder/'child') and not d.scan_job)
-next(b for b in d.findChildren(QPushButton) if b.text()=='↑ 상위').click();wait(lambda:d.folder==str(folder) and not d.scan_job)
+assert d.up.accessibleName()=='상위 폴더';d.up.click();wait(lambda:d.folder==str(folder) and not d.scan_job)
 d.navigate(str(root/'missing'));wait(lambda:not d.scan_job);assert d.folder==str(folder) and '열 수 없습니다' in d.status.text()
 Image.new('RGB',(10,10),'white').save(folder/'new.png');d.navigate(d.folder,refresh=True);wait(lambda:not d.scan_job);assert len(d.model.rows)==4
 # Rapid changes discard an obsolete scan and preview.
