@@ -64,4 +64,16 @@ class EditingTests(unittest.TestCase):
             for strength in (0,.3,1,2):
                 np.testing.assert_array_equal(np.asarray(apply_tone_delta(content,delta,strength)),np.asarray(tone_restore(content,ref,strength,3,lum)))
 
+class LoraTextTests(unittest.TestCase):
+    # Same rule as the ComfyUI BMK Tabbed Notes node's copy button and .txt mirror.
+    def test_enabled_entries_compile_like_the_notes_node(self):
+        from bmk_studio.note_fields import compile_loras
+        loras=[{'name':'Anima\\NikkeB1','weight':1},{'name':' style/sub/ink ','weight':'0.6'},{'name':'off','weight':.5,'enabled':False},{'name':'plain'}]
+        self.assertEqual(compile_loras(loras),('<lora:NikkeB1:1.00>, <lora:ink:0.60>, <lora:plain:1.00>',['off']))
+    def test_entries_the_node_drops_are_skipped_and_bad_weights_read_as_one(self):
+        from bmk_studio.note_fields import compile_loras
+        loras=['x',{'name':''},{'name':'  '},{'name':3},{'weight':.5},{'name':'nan','weight':float('nan')},{'name':'text','weight':'heavy'},{'name':'none','weight':None},{'name':'huge','weight':10**400}]
+        self.assertEqual(compile_loras(loras),('<lora:nan:1.00>, <lora:text:1.00>, <lora:none:1.00>, <lora:huge:1.00>',[]))
+        for value in (None,{},'<lora:a:1>',[]):self.assertEqual(compile_loras(value),('',[]))
+
 if __name__=='__main__':unittest.main()

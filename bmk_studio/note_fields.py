@@ -1,10 +1,29 @@
 """Structured BMK note fields, retaining untouched/unknown values verbatim."""
-import copy,json,math
+import copy,json,math,re
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QDialog,QWidget,QVBoxLayout,QHBoxLayout,QFormLayout,QLabel,QLineEdit,QCheckBox,QTableWidget,QTableWidgetItem,QPushButton,QTabWidget,QDialogButtonBox,QMessageBox)
 
 LORA=[('name','이름',''),('weight','강도',1.0),('enabled','사용',True)]
 PARAM=[('label','라벨',''),('node','노드 ID',''),('widget','위젯',''),('type','타입','string'),('value','값 (JSON 스칼라)',''),('enabled','사용',True),('hint','설명','')]
+
+def lora_basename(name):
+    """LoraManager ignores the loras subfolder, so 'Anima\\NikkeB1' becomes 'NikkeB1'."""
+    return re.split(r'[\\/]',name)[-1] or name
+
+def compile_loras(loras):
+    """The LoRA text the ComfyUI BMK Tabbed Notes node copies and mirrors to .txt: enabled entries as
+    '<lora:file:0.00>' joined by ', '. Returns (text, file names of entries left out because they are switched off).
+    Entries the node drops on load (non-dict, missing or blank name) are skipped; a bad weight reads as 1.0 like the node."""
+    parts,off=[],[]
+    for item in loras if isinstance(loras,list) else []:
+        if not isinstance(item,dict) or not isinstance(item.get('name'),str) or not item['name'].strip():continue
+        name=lora_basename(item['name'].strip())
+        if not item.get('enabled',True):off.append(name);continue
+        try:weight=float(item.get('weight',1.0))
+        except (TypeError,ValueError,OverflowError):weight=1.0
+        if not math.isfinite(weight):weight=1.0
+        parts.append(f'<lora:{name}:{weight:.2f}>')
+    return ', '.join(parts),off
 
 class FieldsTable(QWidget):
     def __init__(self,values,columns,parent=None):

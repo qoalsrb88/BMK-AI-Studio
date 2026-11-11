@@ -20,6 +20,12 @@ w.restore_note_version(first);assert w.draft.toPlainText()=='first'
 assert w.note_extra['custom']=={'keep':True};assert len(w.store.revisions(nid))==3
 w.note_category.setCurrentText('인물/배경');w.save_draft();assert w.store.note(nid)[3]=='인물/배경'
 w.archive_current_note();assert w.store.note(nid)[4]==1;w.archive_current_note();assert w.store.note(nid)[4]==0
+# The read-only LoRA line appears only for a note with LoRA settings and follows every note_extra change.
+assert w.lora_view.toPlainText()=='<lora:keep:1.00>' and not w.lora_box.isHidden() and w.lora_off.isHidden() and w.lora_view.isReadOnly()
+plain=w.store.save_note('LoRA 없음',{'prompt':'plain','loras':[]});w.open_note_id(plain);assert w.lora_box.isHidden() and w.lora_view.toPlainText()==''
+w.note_extra={**w.note_body(),'loras':[{'name':'off','enabled':False}]};assert not w.lora_box.isHidden() and w.lora_view.toPlainText()=='' and w.lora_off.text().endswith('off') and not w.lora_off.isHidden()
+w.open_note_id(nid);assert w.lora_view.toPlainText()=='<lora:keep:1.00>' and w.lora_off.isHidden()
+w.main_tabs.setCurrentIndex(1);assert not w.note_mode and w.lora_box.isHidden();w.main_tabs.setCurrentIndex(2);assert w.note_id==nid and not w.lora_box.isHidden()
 history=RevisionDialog(w.store.revisions(nid),w);history.show();app.processEvents();assert history.revision_id is not None;history.reject()
 resize=ResizeDialog(before,w);resize.show();resize.presets.setCurrentIndex(1);resize.mode.setCurrentIndex(1);app.processEvents();assert resize.settings()[:2]==(1024,1024)
 if len(sys.argv)>1:resize.grab().save(str(Path(sys.argv[1])/'preview-resize.png'))
@@ -46,4 +52,4 @@ assert 'unsaved new note' in w.store.note(w.note_id)[2]
 w.close()
 while w.jobs:app.processEvents();time.sleep(.01)
 app.processEvents()
-print('PASS: note tree/category/autosave/archive/version restore with unknown fields, resize presets, mask paint/undo, asynchronous tone preview, comparison slider')
+print('PASS: note tree/category/autosave/archive/version restore with unknown fields, read-only LoRA line, resize presets, mask paint/undo, asynchronous tone preview, comparison slider')

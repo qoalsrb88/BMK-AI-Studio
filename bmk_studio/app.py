@@ -40,7 +40,7 @@ from .sessions import Sessions
 from .relink import relink_source
 from .prompt_tools import export_stem
 from .wildcard_dialog import WildcardDialog
-from .note_fields import NoteFieldsDialog
+from .note_fields import NoteFieldsDialog, compile_loras
 from .model_dialog import ModelDownloadDialog
 from .queue_dialog import QueueDialog
 from .gpu_tone import tone_restore_cuda
@@ -470,6 +470,13 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
         self.note_category=QComboBox();self.note_category.setEditable(True);self.note_category.setPlaceholderText('카테고리 (예: 캐릭터/의상)');wl.addWidget(self.note_category)
         self.draft=PromptEdit(); self.draft.setPlaceholderText('다음 생성에 사용할 프롬프트');self.work_prompt_header=self.prompt_header('작업 프롬프트',self.draft);wl.addWidget(self.work_prompt_header); wl.addWidget(self.draft,4)
         self.draft_negative=PromptEdit(); self.draft_negative.setPlaceholderText('작업 네거티브');self.work_negative_header=self.prompt_header('작업 네거티브',self.draft_negative);wl.addWidget(self.work_negative_header); wl.addWidget(self.draft_negative,2)
+        # Read-only LoRA line, shown only for a note that keeps LoRA settings; same order as the ComfyUI notes node.
+        self.lora_box=QWidget();ll=QVBoxLayout(self.lora_box);ll.setContentsMargins(0,0,0,0)
+        self.lora_view=PromptEdit();self.lora_view.setReadOnly(True);self.lora_view.setMaximumHeight(80);self.lora_view.setPlaceholderText('사용 중인 LoRA가 없습니다')
+        self.lora_view.setToolTip('ComfyUI 노트 노드가 복사하는 LoRA 텍스트입니다. 수정은 더 보기 → BMK 추가 필드에서 합니다.')
+        self.lora_off=caption('');self.lora_off.setWordWrap(True)
+        ll.addWidget(self.prompt_header('LoRA',self.lora_view));ll.addWidget(self.lora_view);ll.addWidget(self.lora_off)
+        self.lora_box.hide();wl.addWidget(self.lora_box)
         self.memo=QPlainTextEdit(); self.memo.setPlaceholderText('설정·서비스·작업 메모'); wl.addWidget(caption('메모','field')); wl.addWidget(self.memo,2)
         self.conversion=QComboBox(); self.conversion.addItems(BMKPromptSyntaxConverter.MODES);self.conversion.setMinimumContentsLength(10);self.conversion.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         # Prompt tools act on the text above; document actions sit below with the primary save on the right.
@@ -928,6 +935,18 @@ class Studio(MainTabsMixin,DiscoveryMixin,WorkspaceMixin,NoteSyncMixin,QMainWind
                 self.note_tabs.setTabData(self.document_index,{**(self.note_tabs.tabData(self.document_index) or {}),'id':self.note_id})
                 self.note_tabs.setTabText(self.document_index,title)
         if not self.loading:self.save_documents()
+    @property
+    def note_extra(self):return self._note_extra
+    @note_extra.setter
+    def note_extra(self,value):
+        # Every note open, save, field edit, restore and sync reload replaces this dict, so the LoRA line follows it.
+        self._note_extra=value;self.show_note_loras()
+    def show_note_loras(self):
+        if not hasattr(self,'lora_box'):return
+        text,off=compile_loras(self._note_extra.get('loras'))
+        if self.lora_view.toPlainText()!=text:self.lora_view.setPlainText(text)
+        self.lora_off.setText('사용 안 함으로 제외: '+', '.join(off) if off else '');self.lora_off.setVisible(bool(off))
+        self.lora_box.setVisible(bool(text or off))
     def note_body(self):
         body={**self.note_extra,'schema':self.note_extra.get('schema',1),'prompt':self.draft.toPlainText(),'negative':self.draft_negative.toPlainText(),'notes':self.memo.toPlainText()}
         # Only image-mode saves record the open image; a loaded note without a source never borrows one.
